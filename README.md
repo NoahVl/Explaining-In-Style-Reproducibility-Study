@@ -1,1 +1,1 @@
-# FACT: Explaining in Style - Reproducibility-Study
+# FACT: Explaining in Style - Reproducibility Study
