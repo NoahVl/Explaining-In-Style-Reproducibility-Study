@@ -79,9 +79,9 @@ def train_model(model, lr, batch_size, epochs, checkpoint_name, device, train_da
 
     # Make dataloaders from the datasets
     train_loader = DataLoader(train_dataset, batch_size=batch_size,
-                              generator=torch.Generator().manual_seed(42))
+                              generator=torch.Generator().manual_seed(42), pin_memory=True)
     valid_loader = DataLoader(val_dataset, batch_size=batch_size,
-                              generator=torch.Generator().manual_seed(42))
+                              generator=torch.Generator().manual_seed(42), pin_memory=True)
 
     # Initializing the optimizer
     optimizer = torch.optim.Adam(model.parameters(), lr=lr)
@@ -217,7 +217,7 @@ def test_model(model, batch_size, device, seed, test_dataset):
 
     with torch.no_grad():
         test_loader = DataLoader(test_dataset, batch_size=batch_size,
-                                 generator=torch.Generator().manual_seed(42))
+                                 generator=torch.Generator().manual_seed(42), pin_memory=True)
         accuracy = evaluate_model(model, test_loader, device)
         test_results['accuracy'] = accuracy
 
@@ -262,6 +262,8 @@ def main(args: argparse.Namespace):
 
 
 if __name__ == "__main__":
+    torch.cuda.empty_cache()
+
     # Start argparse
     parser = argparse.ArgumentParser(description="Train a classifier")
 
@@ -274,7 +276,7 @@ if __name__ == "__main__":
     # Optimizer hyperparameters
     parser.add_argument('--lr', default=0.01, type=float,
                         help='Learning rate to use')
-    parser.add_argument('--batch_size', default=128, type=int,
+    parser.add_argument('--batch_size', default=38, type=int,
                         help='Minibatch size')
 
     # Other hyperparameters
