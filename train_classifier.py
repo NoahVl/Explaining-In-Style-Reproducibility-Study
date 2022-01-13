@@ -73,9 +73,9 @@ def train_model(model, lr, batch_size, epochs, checkpoint_name, device, train_da
 
     # Make dataloaders from the datasets
     train_loader = DataLoader(train_dataset, batch_size=batch_size,
-                              generator=torch.Generator().manual_seed(42), pin_memory=True)
+                              generator=torch.Generator().manual_seed(42), pin_memory=True, num_workers=6)
     valid_loader = DataLoader(val_dataset, batch_size=batch_size,
-                              generator=torch.Generator().manual_seed(42), pin_memory=True)
+                              generator=torch.Generator().manual_seed(42), pin_memory=True, num_workers=6)
 
     # Initializing the optimizer
     optimizer = torch.optim.Adam(model.parameters(), lr=lr)
@@ -109,7 +109,7 @@ def train_model(model, lr, batch_size, epochs, checkpoint_name, device, train_da
             # Log the loss
             writer.add_scalar('Loss/train', batch_loss.item(), epoch * len(train_loader) + batch_num)
 
-            if batch_num % 100 == 0 or batch_num == len(train_loader) - 1:
+            if batch_num % 1 == 0 or batch_num == len(train_loader) - 1:
                 print('\r',
                       f"Epoch: {epoch}: batch {batch_num + 1}/{len(train_loader)}"
                       f", running loss: {np.average(train_losses)}", end='')
@@ -192,7 +192,8 @@ def test_model(model, batch_size, device, seed, test_dataset):
 
     with torch.no_grad():
         test_loader = DataLoader(test_dataset, batch_size=batch_size,
-                                 generator=torch.Generator().manual_seed(42), pin_memory=True)
+                                 generator=torch.Generator().manual_seed(42), pin_memory=True,
+                                 num_workers=6)
         accuracy = evaluate_model(model, test_loader, device)
         test_results['accuracy'] = accuracy
 
@@ -203,6 +204,31 @@ def test_model(model, batch_size, device, seed, test_dataset):
     model.train()
 
     return test_results
+
+def load_mobilenet(device):
+    """
+    Returns a MobileNet model.
+    :param device: Device to put the model on.
+    """
+    model = torch.hub.load('pytorch/vision:v0.10.0', 'mobilenet_v2', pretrained=True).to(device)
+
+    # Freeze all layers
+    for param in model.parameters():
+        param.requires_grad = False
+
+    # Make the last layer have only 2 outputs instead of 1000.
+    model.classifier[1] = nn.Linear(1280, 2).to(device)
+
+    # TODO: See if freezing only a few layers will improve performance even more.
+    # If you want to only freeze a few layers, you can do this:
+    """
+    # Freeze until the 10th layer.
+    for layer in range(10):
+        for param in model.features[layer].parameters():
+            param.requires_grad = False
+    """
+
+    return model
 
 def main(args: argparse.Namespace):
     """
@@ -220,7 +246,7 @@ def main(args: argparse.Namespace):
     else:
         raise NotImplementedError
     
-    model = torch.hub.load('pytorch/vision:v0.10.0', 'mobilenet_v2', pretrained=True).to(device)
+    model = load_mobilenet(device)
 
     # Check if model was already trained, if it was import it, if not train it
     if not os.path.exists(os.path.join("saved_models", args.checkpoint_name)):
@@ -254,7 +280,7 @@ if __name__ == "__main__":
     # Optimizer hyperparameters
     parser.add_argument('--lr', default=0.01, type=float,
                         help='Learning rate to use')
-    parser.add_argument('--batch_size', default=38, type=int,
+    parser.add_argument('--batch_size', default=200, type=int,  # Was 38 when training all the weights
                         help='Minibatch size')
 
     # Other hyperparameters
