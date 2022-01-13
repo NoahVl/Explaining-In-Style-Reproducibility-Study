@@ -129,4 +129,4 @@ dmypy.json
 .pyre/
 
 # Data for models
-.data/
+flickrfaceshq-dataset-nvidia-resized-256px/
