@@ -128,5 +128,8 @@ dmypy.json
 # Pyre type checker
 .pyre/
 
+# Idea
+./idea
+
 # Data for models
 flickrfaceshq-dataset-nvidia-resized-256px/
