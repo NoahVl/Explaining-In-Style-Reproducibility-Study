@@ -129,7 +129,7 @@ dmypy.json
 .pyre/
 
 # Idea
-./idea
+.idea/
 
 # Data for models
 flickrfaceshq-dataset-nvidia-resized-256px/
