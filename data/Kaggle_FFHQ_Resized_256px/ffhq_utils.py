@@ -18,6 +18,8 @@ def get_train_valid_test_dataset(data_dir, label, valid_ratio=0.15, test_ratio=0
     remainder = len(dataset) - train_length - valid_length - test_length
     train_length += remainder
     train_dataset, val_dataset, test_dataset = torch.utils.data.random_split(dataset,
-                                                                             [train_length, valid_length, test_length])
+                                                                             [train_length, valid_length, test_length],
+                                                                             generator=torch.Generator().manual_seed(42)
+                                                                             )
 
     return train_dataset, val_dataset, test_dataset
