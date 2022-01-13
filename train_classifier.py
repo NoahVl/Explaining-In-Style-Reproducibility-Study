@@ -68,13 +68,7 @@ def train_model(model, lr, batch_size, epochs, checkpoint_name, device, train_da
     Returns:
         model: Model that has performed best on the validation set.
 
-    TODO:
-    Implement the training of the model with the specified hyperparameters.
-    Save the best model to disk so you can load it later.
     """
-    #######################
-    # PUT YOUR CODE HERE  #
-    #######################
     assert epochs > 0, "To train the model the amount of epochs has to be higher than 1."
 
     # Make dataloaders from the datasets
@@ -145,9 +139,6 @@ def train_model(model, lr, batch_size, epochs, checkpoint_name, device, train_da
     # Load best model and return it.
     model = load_model(model, checkpoint_name).to(device)
 
-    #######################
-    # END OF YOUR CODE    #
-    #######################
     return model
 
 
@@ -161,14 +152,7 @@ def evaluate_model(model, data_loader, device):
         device: Device to use for training.
     Returns:
         accuracy: The accuracy on the dataset.
-
-    TODO:
-    Implement the evaluation of the model on the dataset.
-    Remember to set the model in evaluation mode and back to training mode in the training loop.
     """
-    #######################
-    # PUT YOUR CODE HERE  #
-    #######################
     correct_predictions = 0
     number_examples = 0
     for images, targets in data_loader:
@@ -183,9 +167,6 @@ def evaluate_model(model, data_loader, device):
 
     accuracy = correct_predictions / number_examples
 
-    #######################
-    # END OF YOUR CODE    #
-    #######################
     return accuracy
 
 
@@ -200,13 +181,7 @@ def test_model(model, batch_size, device, seed, test_dataset):
         seed: The seed to set before testing to ensure a reproducible test.
         test_dataset: The test dataset to use.
     Returns:
-        test_results: Dictionary containing an overview of the accuracies achieved on the different
-                      corruption functions and the plain test set.
-
-    TODO:
-    Evaluate the model on the plain test set. Make use of the evaluate_model function.
-    For each corruption function and severity, repeat the test.
-    Summarize the results in a dictionary (the structure inside the dict is up to you.)
+        test_results: Dictionary containing an overview of the accuracy.
     """
     set_seed(seed)
 
@@ -252,7 +227,10 @@ def main(args: argparse.Namespace):
         train_model(model, args.lr, args.batch_size, args.epochs, args.checkpoint_name, device, train_dataset,
                     valid_dataset)
     else:
-        load_model(model, args.checkpoint_name).to(device)
+        model = load_model(model, args.checkpoint_name).to(device)
+        if args.continue_training:
+            train_model(model, args.lr, args.batch_size, args.epochs, args.checkpoint_name, device, train_dataset,
+                        valid_dataset)
 
     # Then test the model with all the defined corruption features
     # Return the results
@@ -285,6 +263,7 @@ if __name__ == "__main__":
     parser.add_argument('--seed', default=42, type=int,
                         help='Seed to use for reproducing results')
     parser.add_argument('--checkpoint_name', default="FFHQ-Gender.pth", type=str, help="Name of the model checkpoint")
+    parser.add_argument('--continue_training', dest="continue_training", action="store_false")
 
     # Parse and pass to main
     parse_args = parser.parse_args()
