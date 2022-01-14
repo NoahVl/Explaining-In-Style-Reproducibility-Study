@@ -1,5 +1,7 @@
 import argparse
+import json
 import os
+import time
 
 import numpy as np
 import torch
@@ -21,6 +23,7 @@ def set_seed(seed):
         torch.cuda.manual_seed_all(seed)
     torch.backends.cudnn.determinstic = True
     torch.backends.cudnn.benchmark = False
+
 
 def save_model(model, checkpoint_name):
     """
@@ -91,6 +94,7 @@ def train_model(model, lr, batch_size, epochs, checkpoint_name, device, train_da
 
     # Training loop with validation after each epoch. Save the best model, and remember to use the lr scheduler.
     for epoch in range(epochs):
+        start_epoch_time = time.time()
         train_losses = []
 
         # Training loop
@@ -126,7 +130,10 @@ def train_model(model, lr, batch_size, epochs, checkpoint_name, device, train_da
         with torch.no_grad():
             train_epoch_accuracy = evaluate_model(model, train_loader, device)
             valid_epoch_accuracy = evaluate_model(model, valid_loader, device)
-            print(f", train accuracy: {train_epoch_accuracy}, validation accuracy: {valid_epoch_accuracy}")
+            print(f", train accuracy: {train_epoch_accuracy}, validation accuracy: {valid_epoch_accuracy}, epoch took: "
+                  f"{(time.time() - start_epoch_time) / 60:.2f} minutes")
+
+            # Save model if it is the best model on the validation set.
             if valid_epoch_accuracy > best_valid_accuracy:
                 save_model(model, checkpoint_name)
                 best_valid_accuracy = valid_epoch_accuracy
@@ -205,30 +212,31 @@ def test_model(model, batch_size, device, seed, test_dataset):
 
     return test_results
 
-def load_mobilenet(device):
+
+def load_mobilenet(device, amount_frozen_layers=15, freeze_all_layer=False):
     """
     Returns a MobileNet model.
     :param device: Device to put the model on.
+    :param amount_frozen_layers: Amount of layers to freeze.
+    :param freeze_all_layer: If true, all layers are frozen.
     """
     model = torch.hub.load('pytorch/vision:v0.10.0', 'mobilenet_v2', pretrained=True).to(device)
 
     # Freeze all layers
-    for param in model.parameters():
-        param.requires_grad = False
+    if freeze_all_layer:
+        for param in model.parameters():
+            param.requires_grad = False
 
     # Make the last layer have only 2 outputs instead of 1000.
     model.classifier[1] = nn.Linear(1280, 2).to(device)
 
-    # TODO: See if freezing only a few layers will improve performance even more.
     # If you want to only freeze a few layers, you can do this:
-    """
-    # Freeze until the 10th layer.
-    for layer in range(10):
+    for layer in range(amount_frozen_layers):
         for param in model.features[layer].parameters():
             param.requires_grad = False
-    """
 
     return model
+
 
 def main(args: argparse.Namespace):
     """
@@ -242,11 +250,12 @@ def main(args: argparse.Namespace):
     dataset = None
 
     if args.dataset == "FFHQ-Aging":
-        train_dataset, valid_dataset, test_dataset = ffhq_utils.get_train_valid_test_dataset("data/Kaggle_FFHQ_Resized_256px", "gender")
+        train_dataset, valid_dataset, test_dataset = ffhq_utils.get_train_valid_test_dataset(
+            "data/Kaggle_FFHQ_Resized_256px", "gender")
     else:
         raise NotImplementedError
-    
-    model = load_mobilenet(device)
+
+    model = load_mobilenet(device, args.amount_frozen_layers, args.freeze_all_layers)
 
     # Check if model was already trained, if it was import it, if not train it
     if not os.path.exists(os.path.join("saved_models", args.checkpoint_name)):
@@ -271,6 +280,10 @@ if __name__ == "__main__":
     # Start argparse
     parser = argparse.ArgumentParser(description="Train a classifier")
 
+    # Model
+    parser.add_argument("--freeze_all_layers", dest="freeze_all_layers", action="store_true")
+    parser.add_argument("--amount_frozen_layers", dest="amount_frozen_layers", type=int, default=15)
+
     # Dataset
     parser.add_argument("--dataset", type=str, default="FFHQ-Aging", help="Dataset to train on")
 
@@ -289,8 +302,15 @@ if __name__ == "__main__":
     parser.add_argument('--seed', default=42, type=int,
                         help='Seed to use for reproducing results')
     parser.add_argument('--checkpoint_name', default="FFHQ-Gender.pth", type=str, help="Name of the model checkpoint")
-    parser.add_argument('--continue_training', dest="continue_training", action="store_false")
+    parser.add_argument('--continue_training', dest="continue_training", action="store_true")
 
     # Parse and pass to main
     parse_args = parser.parse_args()
-    main(parse_args)
+    results = main(parse_args)
+
+    # Write results to a json file with the same name as the checkpoint
+    # First check if a folder called classifier_results exists, if not create it and save the csv file there
+    if not os.path.exists("classifier_results"):
+        os.mkdir("classifier_results")
+    with open(os.path.join("classifier_results", parse_args.checkpoint_name.split(".")[0] + ".json"), "w") as f:
+        json.dump(results, f)
