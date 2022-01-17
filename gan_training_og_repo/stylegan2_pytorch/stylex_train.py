@@ -48,7 +48,7 @@ import aim
 assert torch.cuda.is_available(), 'You need to have an Nvidia GPU with CUDA installed.'
 
 # Classifier
-from load_classifier import load_classifier
+from mobilenet_classifier import MobileNet
 
 # Debug Encoder
 from debug_encoder import DebugEncoder
@@ -970,8 +970,7 @@ class Trainer():
         self.logger = aim.Session(experiment=name) if log else None
 
         # Load classifier
-        self.classifier = load_classifier(classifier_model_name, cuda_rank=rank)
-        self.classifier.eval()  # Put in eval mode because it shouldn't be trained.
+        self.classifier = MobileNet(classifier_model_name, cuda_rank=rank)  # Automatically put into training mode
 
         # Encoder placeholder
         self.encoder = None
@@ -1106,7 +1105,7 @@ class Trainer():
 
             # get_latents_fn = mixed_list if random() < self.mixed_prob else noise_list
             encoder_output = self.encoder(image_batch)
-            classifier_output = self.classifier(image_batch)
+            classifier_output = self.classifier.classify_images(image_batch)
             style = [(torch.cat((encoder_output, classifier_output), dim=1), self.GAN.G.num_layers)]   # Has to be bracketed because expects a noise mix
             noise = image_noise(batch_size, image_size, device=self.rank)
 
@@ -1163,7 +1162,7 @@ class Trainer():
 
             # get_latents_fn = mixed_list if random() < self.mixed_prob else noise_list
             encoder_output = self.encoder(image_batch)
-            classifier_output = self.classifier(image_batch)
+            classifier_output = self.classifier.classify_images(image_batch)
             style = [(torch.cat((encoder_output, classifier_output), dim=1), self.GAN.G.num_layers)]
             noise = image_noise(batch_size, image_size, device=self.rank)
 
@@ -1171,6 +1170,7 @@ class Trainer():
             w_styles = styles_def_to_tensor(w_space)
 
             generated_images = G(w_styles, noise)
+            classification_results_gen_images = self.classifier.classify_images(generated_images)  # TODO: Use this for classification loss
             fake_output, _ = D_aug(generated_images, **aug_kwargs)
             fake_output_loss = fake_output
 
