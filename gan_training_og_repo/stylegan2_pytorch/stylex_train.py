@@ -47,6 +47,12 @@ import aim
 
 assert torch.cuda.is_available(), 'You need to have an Nvidia GPU with CUDA installed.'
 
+# Classifier
+from load_classifier import load_classifier
+
+# Debug Encoder
+from debug_encoder import DebugEncoder
+
 # constants
 
 NUM_CORES = multiprocessing.cpu_count()
@@ -771,6 +777,7 @@ class StyleGAN2(nn.Module):
 
         self.D_cl = None
 
+        # Is turned off by default
         if cl_reg:
             from contrastive_learner import ContrastiveLearner
             # experimental contrastive loss discriminator regularization
@@ -873,6 +880,7 @@ class Trainer():
             rank=0,
             world_size=1,
             log=False,
+            classifier_model_name="FFHQ-Gender.pth",
             *args,
             **kwargs
     ):
@@ -961,6 +969,13 @@ class Trainer():
 
         self.logger = aim.Session(experiment=name) if log else None
 
+        # Load classifier
+        self.classifier = load_classifier(classifier_model_name, cuda_rank=rank)
+        self.classifier.eval()  # Put in eval mode because it shouldn't be trained.
+
+        # Encoder placeholder
+        self.encoder = None
+
     @property
     def image_extension(self):
         return 'jpg' if not self.transparent else 'png'
@@ -1032,9 +1047,16 @@ class Trainer():
     def train(self):
         assert exists(self.loader), 'You must first initialize the data source with `.set_data_src(<folder of images>)`'
 
+        print("train call")
+
         if not exists(self.GAN):
             self.init_GAN()
 
+        # Initialize the encoder
+        if not exists(self.encoder):
+            self.encoder = DebugEncoder(image_size=self.image_size, latent_size=512)
+
+        self.encoder.train()
         self.GAN.train()
         total_disc_loss = torch.tensor(0.).cuda(self.rank)
         total_gen_loss = torch.tensor(0.).cuda(self.rank)
@@ -1059,31 +1081,6 @@ class Trainer():
         D_aug = self.GAN.D_aug if not self.is_ddp else self.D_aug_ddp
 
         backwards = partial(loss_backwards, self.fp16)
-
-        if exists(self.GAN.D_cl):
-            self.GAN.D_opt.zero_grad()
-
-            if apply_cl_reg_to_generated:
-                for i in range(self.gradient_accumulate_every):
-                    get_latents_fn = mixed_list if random() < self.mixed_prob else noise_list
-                    style = get_latents_fn(batch_size, num_layers, latent_dim, device=self.rank)
-                    noise = image_noise(batch_size, image_size, device=self.rank)
-
-                    w_space = latent_to_w(self.GAN.S, style)
-                    w_styles = styles_def_to_tensor(w_space)
-
-                    generated_images = self.GAN.G(w_styles, noise)
-                    self.GAN.D_cl(generated_images.clone().detach(), accumulate=True)
-
-            for i in range(self.gradient_accumulate_every):
-                image_batch = next(self.loader).cuda(self.rank)
-                self.GAN.D_cl(image_batch, accumulate=True)
-
-            loss = self.GAN.D_cl.calculate_loss()
-            self.last_cr_loss = loss.clone().detach().item()
-            backwards(loss, self.GAN.D_opt, loss_id=0)
-
-            self.GAN.D_opt.step()
 
         # setup losses
 

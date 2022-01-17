@@ -5,7 +5,7 @@ from retry.api import retry_call
 from tqdm import tqdm
 from datetime import datetime
 from functools import wraps
-from stylegan2_pytorch_script import Trainer, NanException
+from stylex_train import Trainer, NanException
 
 import torch
 import torch.multiprocessing as mp
