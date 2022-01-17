@@ -1047,14 +1047,12 @@ class Trainer():
     def train(self):
         assert exists(self.loader), 'You must first initialize the data source with `.set_data_src(<folder of images>)`'
 
-        print("train call")
-
         if not exists(self.GAN):
             self.init_GAN()
 
         # Initialize the encoder
         if not exists(self.encoder):
-            self.encoder = DebugEncoder(image_size=self.image_size, latent_size=512)
+            self.encoder = DebugEncoder(image_size=self.image_size, latent_size=510).cuda(self.rank)  # TODO: Make it 512 again once we figure out where they 512 + 2 to 512.
 
         self.encoder.train()
         self.GAN.train()
@@ -1099,18 +1097,27 @@ class Trainer():
         self.GAN.D_opt.zero_grad()
 
         for i in gradient_accumulate_contexts(self.gradient_accumulate_every, self.is_ddp, ddps=[D_aug, S, G]):
-            get_latents_fn = mixed_list if random() < self.mixed_prob else noise_list
-            style = get_latents_fn(batch_size, num_layers, latent_dim, device=self.rank)
+            # Original style input
+            # get_latents_fn = mixed_list if random() < self.mixed_prob else noise_list
+            # style = get_latents_fn(batch_size, num_layers, latent_dim, device=self.rank)
+
+            image_batch = next(self.loader).cuda(self.rank)
+            image_batch.requires_grad_()
+
+            # get_latents_fn = mixed_list if random() < self.mixed_prob else noise_list
+            encoder_output = self.encoder(image_batch)
+            classifier_output = self.classifier(image_batch)
+            style = [(torch.cat((encoder_output, classifier_output), dim=1), self.GAN.G.num_layers)]   # Has to be bracketed because expects a noise mix
             noise = image_noise(batch_size, image_size, device=self.rank)
 
             w_space = latent_to_w(S, style)
             w_styles = styles_def_to_tensor(w_space)
+            # 6 layers, batch_size 5 produces (5, 6, 512) style tensor after going through StyleVectorizer
+            # Layer size of discriminator is linked to image size, likely because of upsampling.
 
             generated_images = G(w_styles, noise)
             fake_output, fake_q_loss = D_aug(generated_images.clone().detach(), detach=True, **aug_kwargs)
 
-            image_batch = next(self.loader).cuda(self.rank)
-            image_batch.requires_grad_()
             real_output, real_q_loss = D_aug(image_batch, **aug_kwargs)
 
             real_output_loss = real_output
@@ -1151,7 +1158,13 @@ class Trainer():
         self.GAN.G_opt.zero_grad()
 
         for i in gradient_accumulate_contexts(self.gradient_accumulate_every, self.is_ddp, ddps=[S, G, D_aug]):
-            style = get_latents_fn(batch_size, num_layers, latent_dim, device=self.rank)
+            image_batch = next(self.loader).cuda(self.rank)
+            image_batch.requires_grad_()
+
+            # get_latents_fn = mixed_list if random() < self.mixed_prob else noise_list
+            encoder_output = self.encoder(image_batch)
+            classifier_output = self.classifier(image_batch)
+            style = [(torch.cat((encoder_output, classifier_output), dim=1), self.GAN.G.num_layers)]
             noise = image_noise(batch_size, image_size, device=self.rank)
 
             w_space = latent_to_w(S, style)
