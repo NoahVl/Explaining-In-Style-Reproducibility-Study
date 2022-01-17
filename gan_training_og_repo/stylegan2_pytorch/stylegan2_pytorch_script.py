@@ -28,8 +28,8 @@ from kornia.filters import filter2d
 
 import torchvision
 from torchvision import transforms
-from stylegan2_pytorch.version import __version__
-from stylegan2_pytorch.diff_augment import DiffAugment
+from version import __version__
+from diff_augment import DiffAugment
 
 from vector_quantize_pytorch import VectorQuantize
 

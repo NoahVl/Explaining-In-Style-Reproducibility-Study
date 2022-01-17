@@ -5,7 +5,7 @@ from retry.api import retry_call
 from tqdm import tqdm
 from datetime import datetime
 from functools import wraps
-from stylegan2_pytorch import Trainer, NanException
+from stylegan2_pytorch_script import Trainer, NanException
 
 import torch
 import torch.multiprocessing as mp
@@ -82,7 +82,7 @@ def train_from_folder(
         load_from=-1,
         image_size=128,
         network_capacity=16,
-        fmap_max=512,
+        fmap_max=512,   # 512
         transparent=False,
         batch_size=5,
         gradient_accumulate_every=6,
@@ -91,9 +91,9 @@ def train_from_folder(
         lr_mlp=0.1,
         ttur_mult=1.5,
         rel_disc_loss=False,
-        num_workers=None,
-        save_every=1000,
-        evaluate_every=1000,
+        num_workers=4,  # None
+        save_every=100,  # 1000
+        evaluate_every=100,  # 1000
         generate=False,
         num_generate=1,
         generate_interpolation=False,
@@ -195,3 +195,7 @@ def train_from_folder(
 
 def main():
     fire.Fire(train_from_folder)
+
+
+if __name__ == '__main__':
+    main()
