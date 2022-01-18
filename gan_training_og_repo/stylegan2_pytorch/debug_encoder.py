@@ -1,5 +1,6 @@
 import torch
 import torch.nn.functional as F
+from torchvision.transforms import transforms
 
 
 class DebugEncoder(torch.nn.Module):
@@ -17,6 +18,10 @@ class DebugEncoder(torch.nn.Module):
     def __init__(self, image_size=256, latent_size=512):
         super(DebugEncoder, self).__init__()
         self.latent_size = latent_size
+
+        self.tensor_transform = transforms.Compose([
+            transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225])
+        ])
 
         self.conv1 = torch.nn.Conv2d(3, 32, kernel_size=3, stride=2, padding=1)
         self.conv2 = torch.nn.Conv2d(32, 32, kernel_size=3, stride=2, padding=1)

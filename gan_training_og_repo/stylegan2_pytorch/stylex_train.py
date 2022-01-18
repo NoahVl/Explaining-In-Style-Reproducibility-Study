@@ -343,6 +343,9 @@ def slerp(val, low, high):
     return res
 
 
+def lpips_normalize(images):
+    return images / torch.max(images, dim=0) * 2 - 1
+
 # losses
 
 def gen_hinge_loss(fake, real):
@@ -365,6 +368,25 @@ def dual_contrastive_loss(real_logits, fake_logits):
 
     return loss_half(real_logits, fake_logits) + loss_half(-fake_logits, -real_logits)
 
+
+# Our losses
+lpips_loss = lpips.LPIPS(net="alex")  # image should be RGB, IMPORTANT: normalized to [-1,1]
+l1_loss = nn.L1Loss()
+kl_loss = nn.KLDivLoss()
+
+
+def reconstruction_loss(encoder_batch: torch.Tensor, generated_images: torch.Tensor, generated_images_w: torch.Tensor,
+                        encoder_w: torch.Tensor):
+    encoder_batch_norm = lpips_normalize(encoder_batch)
+    generated_images_norm = lpips_normalize(generated_images)
+
+    # LPIPS reconstruction loss
+    loss = lpips_loss(encoder_batch_norm, generated_images_norm) + l1_loss(encoder_w, generated_images_w) + l1_loss(encoder_batch, generated_images)
+    return loss
+
+def classifier_kl_loss(real_classifier_logits, fake_classifier_logits):
+    loss = kl_loss(fake_classifier_logits, real_classifier_logits)
+    return loss
 
 # dataset
 
@@ -777,6 +799,10 @@ class StyleGAN2(nn.Module):
 
         self.D_cl = None
 
+        # Create encoder
+        # TODO: Make it 512 again once we figure out where they 512 + 2 to 512.
+        self.encoder = DebugEncoder(image_size=image_size, latent_size=510).cuda(rank)
+
         # Is turned off by default
         if cl_reg:
             from contrastive_learner import ContrastiveLearner
@@ -792,7 +818,7 @@ class StyleGAN2(nn.Module):
         set_requires_grad(self.GE, False)
 
         # init optimizers
-        generator_params = list(self.G.parameters()) + list(self.S.parameters())
+        generator_params = list(self.G.parameters()) + list(self.S.parameters()) + list(self.encoder.parameters())
         self.G_opt = Adam(generator_params, lr=self.lr, betas=(0.5, 0.9))
         self.D_opt = Adam(self.D.parameters(), lr=self.lr * ttur_mult, betas=(0.5, 0.9))
 
@@ -805,8 +831,9 @@ class StyleGAN2(nn.Module):
         # startup apex mixed precision
         self.fp16 = fp16
         if fp16:
-            (self.S, self.G, self.D, self.SE, self.GE), (self.G_opt, self.D_opt) = amp.initialize(
-                [self.S, self.G, self.D, self.SE, self.GE], [self.G_opt, self.D_opt], opt_level='O1', num_losses=3)
+            (self.S, self.G, self.D, self.SE, self.GE, self.encoder), (self.G_opt, self.D_opt) = amp.initialize(
+                [self.S, self.G, self.D, self.SE, self.GE, self.encoder], [self.G_opt, self.D_opt], opt_level='O1',
+                num_losses=3)
 
     def _init_weights(self):
         for m in self.modules():
@@ -972,9 +999,6 @@ class Trainer():
         # Load classifier
         self.classifier = MobileNet(classifier_model_name, cuda_rank=rank)  # Automatically put into training mode
 
-        # Encoder placeholder
-        self.encoder = None
-
     @property
     def image_extension(self):
         return 'jpg' if not self.transparent else 'png'
@@ -1049,11 +1073,7 @@ class Trainer():
         if not exists(self.GAN):
             self.init_GAN()
 
-        # Initialize the encoder
-        if not exists(self.encoder):
-            self.encoder = DebugEncoder(image_size=self.image_size, latent_size=510).cuda(self.rank)  # TODO: Make it 512 again once we figure out where they 512 + 2 to 512.
-
-        self.encoder.train()
+        self.GAN.encoder.train()
         self.GAN.train()
         total_disc_loss = torch.tensor(0.).cuda(self.rank)
         total_gen_loss = torch.tensor(0.).cuda(self.rank)
@@ -1100,24 +1120,28 @@ class Trainer():
             # get_latents_fn = mixed_list if random() < self.mixed_prob else noise_list
             # style = get_latents_fn(batch_size, num_layers, latent_dim, device=self.rank)
 
-            image_batch = next(self.loader).cuda(self.rank)
-            image_batch.requires_grad_()
+            encoder_batch = next(self.loader).cuda(self.rank)
+            discriminator_batch = next(self.loader).cuda(self.rank)
+            encoder_batch.requires_grad_()
+            discriminator_batch.requires_grad_()
 
             # get_latents_fn = mixed_list if random() < self.mixed_prob else noise_list
-            encoder_output = self.encoder(image_batch)
-            classifier_output = self.classifier.classify_images(image_batch)
-            style = [(torch.cat((encoder_output, classifier_output), dim=1), self.GAN.G.num_layers)]   # Has to be bracketed because expects a noise mix
+            encoder_output = self.GAN.encoder(encoder_batch)
+            classifier_output = self.classifier.classify_images(encoder_batch)
+            style = [(torch.cat((encoder_output, classifier_output), dim=1),
+                      self.GAN.G.num_layers)]  # Has to be bracketed because expects a noise mix
             noise = image_noise(batch_size, image_size, device=self.rank)
 
-            w_space = latent_to_w(S, style)
-            w_styles = styles_def_to_tensor(w_space)
+            # w_space = latent_to_w(S, style)
+            # w_styles = styles_def_to_tensor(w_space)
             # 6 layers, batch_size 5 produces (5, 6, 512) style tensor after going through StyleVectorizer
             # Layer size of discriminator is linked to image size, likely because of upsampling.
+            w_styles = styles_def_to_tensor(style)
 
             generated_images = G(w_styles, noise)
             fake_output, fake_q_loss = D_aug(generated_images.clone().detach(), detach=True, **aug_kwargs)
 
-            real_output, real_q_loss = D_aug(image_batch, **aug_kwargs)
+            real_output, real_q_loss = D_aug(discriminator_batch, **aug_kwargs)
 
             real_output_loss = real_output
             fake_output_loss = fake_output
@@ -1136,7 +1160,7 @@ class Trainer():
                 disc_loss = disc_loss + quantize_loss
 
             if apply_gradient_penalty:
-                gp = gradient_penalty(image_batch, real_output)
+                gp = gradient_penalty(discriminator_batch, real_output)
                 self.last_gp_loss = gp.clone().detach().item()
                 self.track(self.last_gp_loss, 'GP')
                 disc_loss = disc_loss + gp
@@ -1155,22 +1179,24 @@ class Trainer():
         # train generator
 
         self.GAN.G_opt.zero_grad()
+        self.GAN.encoder.zero_grad()
 
         for i in gradient_accumulate_contexts(self.gradient_accumulate_every, self.is_ddp, ddps=[S, G, D_aug]):
             image_batch = next(self.loader).cuda(self.rank)
             image_batch.requires_grad_()
 
             # get_latents_fn = mixed_list if random() < self.mixed_prob else noise_list
-            encoder_output = self.encoder(image_batch)
-            classifier_output = self.classifier.classify_images(image_batch)
+            encoder_output = self.GAN.encoder(image_batch)
+            real_classified_logits = self.classifier.classify_images(image_batch)
             style = [(torch.cat((encoder_output, classifier_output), dim=1), self.GAN.G.num_layers)]
             noise = image_noise(batch_size, image_size, device=self.rank)
 
-            w_space = latent_to_w(S, style)
-            w_styles = styles_def_to_tensor(w_space)
+            # w_space = latent_to_w(S, style)
+            # w_styles = styles_def_to_tensor(w_space)
+            w_styles = styles_def_to_tensor(style)
 
             generated_images = G(w_styles, noise)
-            classification_results_gen_images = self.classifier.classify_images(generated_images)  # TODO: Use this for classification loss
+            gen_image_classified_logits = self.classifier.classify_images(generated_images)
             fake_output, _ = D_aug(generated_images, **aug_kwargs)
             fake_output_loss = fake_output
 
@@ -1188,6 +1214,11 @@ class Trainer():
                 if k != batch_size:
                     fake_output_loss, _ = fake_output_loss.topk(k=k, largest=False)
 
+            # Our losses
+            rec_loss = 0.1 * reconstruction_loss(image_batch, generated_images, self.GAN.encoder(generated_images), encoder_output)
+            kl_loss = classifier_kl_loss(real_classified_logits, gen_image_classified_logits)
+
+            # Original loss
             loss = G_loss_fn(fake_output_loss, real_output)
             gen_loss = loss
 
@@ -1201,8 +1232,13 @@ class Trainer():
                         gen_loss = gen_loss + pl_loss
 
             gen_loss = gen_loss / self.gradient_accumulate_every
+            # rec_loss = rec_loss / self.gradient_accumulate_every  #TODO: Gradient accumulation for reconstruction loss
             gen_loss.register_hook(raise_if_nan)
+
+  
             backwards(gen_loss, self.GAN.G_opt, loss_id=2)
+            backwards(rec_loss, self.GAN.G.opt, loss_id=3)
+            backwards(kl_loss, self.GAN.G.opt, loss_id=4)
 
             total_gen_loss += loss.detach().item() / self.gradient_accumulate_every
 
