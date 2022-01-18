@@ -203,7 +203,7 @@ def test_model(model, batch_size, device, seed, test_dataset):
                                  generator=torch.Generator().manual_seed(42), pin_memory=True,
                                  num_workers=6)
         accuracy = evaluate_model(model, test_loader, device)
-        test_results['accuracy'] = accuracy
+        test_results['accuracy'] = accuracy.item()
 
         # Test accuracy
         print(f"Test accuracy: {accuracy.item():.4f}")
