@@ -970,6 +970,8 @@ class Trainer():
 
         self.d_loss = 0
         self.g_loss = 0
+        self.total_rec_loss = 0
+        self.total_kl_loss = 0
         self.q_loss = None
         self.last_gp_loss = None
         self.last_cr_loss = None
@@ -1249,9 +1251,12 @@ class Trainer():
 
 
         self.g_loss = float(total_gen_loss)
+        self.total_rec_loss = float(total_rec_loss)
+        self.total_kl_loss = float(total_kl_loss)
+
         self.track(self.g_loss, 'G')
-        self.track(total_rec_loss, 'Rec')
-        self.track(total_kl_loss, 'KL')
+        self.track(self.total_rec_loss, 'Rec')
+        self.track(self.total_kl_loss, 'KL')
 
         self.GAN.G_opt.step()
 
@@ -1471,7 +1476,9 @@ class Trainer():
             ('PL', self.pl_mean),
             ('CR', self.last_cr_loss),
             ('Q', self.q_loss),
-            ('FID', self.last_fid)
+            ('FID', self.last_fid),
+            ('Rec', self.total_rec_loss),
+            ('KL', self.total_kl_loss)
         ]
 
         data = [d for d in data if exists(d[1])]
