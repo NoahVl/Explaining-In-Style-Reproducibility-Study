@@ -9,8 +9,9 @@ from torch import nn
 from torch.utils.tensorboard import SummaryWriter
 from torch.utils.data import DataLoader
 
+# Dataset utils
 from data.Kaggle_FFHQ_Resized_256px import ffhq_utils
-
+from data.MNIST import mnist_util
 
 def set_seed(seed):
     """
@@ -202,7 +203,7 @@ def test_model(model, batch_size, device, seed, test_dataset):
                                  generator=torch.Generator().manual_seed(42), pin_memory=True,
                                  num_workers=6)
         accuracy = evaluate_model(model, test_loader, device)
-        test_results['accuracy'] = accuracy
+        test_results['accuracy'] = accuracy.item()
 
         # Test accuracy
         print(f"Test accuracy: {accuracy.item():.4f}")
@@ -213,7 +214,7 @@ def test_model(model, batch_size, device, seed, test_dataset):
     return test_results
 
 
-def load_mobilenet(device, amount_frozen_layers=15, freeze_all_layer=False):
+def load_mobilenet(device, class_labels=2, amount_frozen_layers=15, freeze_all_layer=False):
     """
     Returns a MobileNet model.
     :param device: Device to put the model on.
@@ -228,7 +229,7 @@ def load_mobilenet(device, amount_frozen_layers=15, freeze_all_layer=False):
             param.requires_grad = False
 
     # Make the last layer have only 2 outputs instead of 1000.
-    model.classifier[1] = nn.Linear(1280, 2).to(device)
+    model.classifier[1] = nn.Linear(1280, class_labels).to(device)
 
     # If you want to only freeze a few layers, you can do this:
     for layer in range(amount_frozen_layers):
@@ -247,15 +248,17 @@ def main(args: argparse.Namespace):
     device = torch.device("cuda:0") if torch.cuda.is_available() else torch.device("cpu")
     set_seed(args.seed)
 
-    dataset = None
-
     if args.dataset == "FFHQ-Aging":
         train_dataset, valid_dataset, test_dataset = ffhq_utils.get_train_valid_test_dataset(
             "data/Kaggle_FFHQ_Resized_256px", "gender")
+        unique_class_labels = 2
+    elif args.dataset == "MNIST":
+        train_dataset, valid_dataset, test_dataset = mnist_util.mnist_train_valid_test_dataset("data/MNIST/data")
+        unique_class_labels = 10
     else:
         raise NotImplementedError
 
-    model = load_mobilenet(device, args.amount_frozen_layers, args.freeze_all_layers)
+    model = load_mobilenet(device, unique_class_labels, args.amount_frozen_layers, args.freeze_all_layers)
 
     # Check if model was already trained, if it was import it, if not train it
     if not os.path.exists(os.path.join("saved_models", args.checkpoint_name)):
