@@ -30,6 +30,7 @@ class DebugEncoder(torch.nn.Module):
         self.linear1 = torch.nn.Linear(self.forward_shape(torch.randn(1, 3, image_size, image_size)), latent_size)
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
+        x = self.tensor_transform(x)
         x = F.leaky_relu(self.conv1(x), 0.2)
         x = F.leaky_relu(self.conv2(x), 0.2)
         x = F.leaky_relu(self.conv3(x), 0.2)

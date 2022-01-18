@@ -4,6 +4,8 @@ import math
 import fire
 import json
 
+import lpips
+
 from tqdm import tqdm
 from math import floor, log2
 from random import random
