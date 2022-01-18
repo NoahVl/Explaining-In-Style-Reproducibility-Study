@@ -1,10 +1,6 @@
 import torch
 
-# tools used or loading cifar10 dataset
-from torchvision.datasets import CIFAR10
 from torch.utils.data import DataLoader
-from torchvision import transforms
-
 from data.Kaggle_FFHQ_Resized_256px.data_loader import FFHQ
 
 
