@@ -783,7 +783,7 @@ class Discriminator(nn.Module):
 class StyleGAN2(nn.Module):
     def __init__(self, image_size, latent_dim=512, fmap_max=512, style_depth=8, network_capacity=16, transparent=False,
                  fp16=False, cl_reg=False, steps=1, lr=1e-4, ttur_mult=2, fq_layers=[], fq_dict_size=256,
-                 attn_layers=[], no_const=False, lr_mlp=0.1, rank=0):
+                 attn_layers=[], no_const=False, lr_mlp=0.1, rank=0, classifier_labels=2):
         super().__init__()
         self.lr = lr
         self.steps = steps
@@ -803,7 +803,7 @@ class StyleGAN2(nn.Module):
 
         # Create encoder
         # TODO: Make it 512 again once we figure out where they 512 + 2 to 512.
-        self.encoder = DebugEncoder(image_size=image_size, latent_size=510).cuda(rank)
+        self.encoder = DebugEncoder(image_size=image_size, latent_size=512 - classifier_labels).cuda(rank)
 
         # Is turned off by default
         if cl_reg:
@@ -909,7 +909,8 @@ class Trainer():
             rank=0,
             world_size=1,
             log=False,
-            classifier_model_name="FFHQ-Gender.pth",
+            classifier_model_name="mnist.pth", #TODO: Used to be FFHQ-Gender.pth,
+            classifier_classes=10,  # TODO: Used to be 2 for faces gender.
             *args,
             **kwargs
     ):
@@ -999,7 +1000,8 @@ class Trainer():
         self.logger = aim.Session(experiment=name) if log else None
 
         # Load classifier
-        self.classifier = MobileNet(classifier_model_name, cuda_rank=rank)  # Automatically put into training mode
+        self.classifier_classes = classifier_classes
+        self.classifier = MobileNet(classifier_model_name, cuda_rank=rank, output_size=self.classifier_classes)  # Automatically put into eval mode
 
     @property
     def image_extension(self):
@@ -1019,7 +1021,7 @@ class Trainer():
                              network_capacity=self.network_capacity, fmap_max=self.fmap_max,
                              transparent=self.transparent, fq_layers=self.fq_layers, fq_dict_size=self.fq_dict_size,
                              attn_layers=self.attn_layers, fp16=self.fp16, cl_reg=self.cl_reg, no_const=self.no_const,
-                             rank=self.rank, *args, **kwargs)
+                             rank=self.rank, classifier_labels=self.classifier_classes, *args, **kwargs)
 
         if self.is_ddp:
             ddp_kwargs = {'device_ids': [self.rank]}
