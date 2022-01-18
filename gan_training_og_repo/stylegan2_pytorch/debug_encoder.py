@@ -37,6 +37,7 @@ class DebugEncoder(torch.nn.Module):
         # Flatten but keep the batch dimension
         x = x.flatten(start_dim=1)
         x = F.leaky_relu(self.linear1(x), 0.2)
+        x = F.normalize(x, dim=1)
         return x
 
 

@@ -42,6 +42,10 @@ class MobileNet():
             transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225])
         ])
 
+        # Freeze all layers
+        for param in self.model.parameters():
+            param.requires_grad = False
+
         # Put the model in evaluation mode.
         self.model.eval()
 
@@ -55,5 +59,4 @@ class MobileNet():
             preprocessed_images = self.image_transform(images)
 
         # Classify the images.
-        with torch.no_grad():
-            return self.model(self.tensor_transform(preprocessed_images))
+        return self.model(self.tensor_transform(preprocessed_images))

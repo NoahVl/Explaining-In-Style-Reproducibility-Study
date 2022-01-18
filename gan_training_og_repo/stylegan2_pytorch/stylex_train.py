@@ -346,7 +346,7 @@ def slerp(val, low, high):
 
 
 def lpips_normalize(images):
-    return images / torch.max(images, dim=0) * 2 - 1
+    return images / torch.max(images, dim=0)[0] * 2 - 1
 
 # losses
 
@@ -372,9 +372,9 @@ def dual_contrastive_loss(real_logits, fake_logits):
 
 
 # Our losses
-lpips_loss = lpips.LPIPS(net="alex")  # image should be RGB, IMPORTANT: normalized to [-1,1]
+lpips_loss = lpips.LPIPS(net="alex").cuda(0)  # image should be RGB, IMPORTANT: normalized to [-1,1]
 l1_loss = nn.L1Loss()
-kl_loss = nn.KLDivLoss()
+kl_loss = nn.KLDivLoss(reduction="batchmean")
 
 
 def reconstruction_loss(encoder_batch: torch.Tensor, generated_images: torch.Tensor, generated_images_w: torch.Tensor,
@@ -383,7 +383,7 @@ def reconstruction_loss(encoder_batch: torch.Tensor, generated_images: torch.Ten
     generated_images_norm = lpips_normalize(generated_images)
 
     # LPIPS reconstruction loss
-    loss = lpips_loss(encoder_batch_norm, generated_images_norm) + l1_loss(encoder_w, generated_images_w) + l1_loss(encoder_batch, generated_images)
+    loss = lpips_loss(encoder_batch_norm, generated_images_norm).mean() + l1_loss(encoder_w, generated_images_w) + l1_loss(encoder_batch, generated_images)
     return loss
 
 def classifier_kl_loss(real_classifier_logits, fake_classifier_logits):
@@ -1079,6 +1079,8 @@ class Trainer():
         self.GAN.train()
         total_disc_loss = torch.tensor(0.).cuda(self.rank)
         total_gen_loss = torch.tensor(0.).cuda(self.rank)
+        total_rec_loss = torch.tensor(0.).cuda(self.rank)
+        total_kl_loss = torch.tensor(0.).cuda(self.rank)
 
         batch_size = math.ceil(self.batch_size / self.world_size)
 
@@ -1129,8 +1131,8 @@ class Trainer():
 
             # get_latents_fn = mixed_list if random() < self.mixed_prob else noise_list
             encoder_output = self.GAN.encoder(encoder_batch)
-            classifier_output = self.classifier.classify_images(encoder_batch)
-            style = [(torch.cat((encoder_output, classifier_output), dim=1),
+            real_classified_logits = self.classifier.classify_images(encoder_batch)
+            style = [(torch.cat((encoder_output, real_classified_logits), dim=1),
                       self.GAN.G.num_layers)]  # Has to be bracketed because expects a noise mix
             noise = image_noise(batch_size, image_size, device=self.rank)
 
@@ -1181,7 +1183,6 @@ class Trainer():
         # train generator
 
         self.GAN.G_opt.zero_grad()
-        self.GAN.encoder.zero_grad()
 
         for i in gradient_accumulate_contexts(self.gradient_accumulate_every, self.is_ddp, ddps=[S, G, D_aug]):
             image_batch = next(self.loader).cuda(self.rank)
@@ -1190,15 +1191,14 @@ class Trainer():
             # get_latents_fn = mixed_list if random() < self.mixed_prob else noise_list
             encoder_output = self.GAN.encoder(image_batch)
             real_classified_logits = self.classifier.classify_images(image_batch)
-            style = [(torch.cat((encoder_output, classifier_output), dim=1), self.GAN.G.num_layers)]
+            style = [(torch.cat((encoder_output, real_classified_logits), dim=1), self.GAN.G.num_layers)]
             noise = image_noise(batch_size, image_size, device=self.rank)
 
-            # w_space = latent_to_w(S, style)
-            # w_styles = styles_def_to_tensor(w_space)
             w_styles = styles_def_to_tensor(style)
 
             generated_images = G(w_styles, noise)
             gen_image_classified_logits = self.classifier.classify_images(generated_images)
+
             fake_output, _ = D_aug(generated_images, **aug_kwargs)
             fake_output_loss = fake_output
 
@@ -1218,7 +1218,7 @@ class Trainer():
 
             # Our losses
             rec_loss = 0.1 * reconstruction_loss(image_batch, generated_images, self.GAN.encoder(generated_images), encoder_output)
-            kl_loss = classifier_kl_loss(real_classified_logits, gen_image_classified_logits)
+            kl_loss = 0.0001 * classifier_kl_loss(real_classified_logits, gen_image_classified_logits)
 
             # Original loss
             loss = G_loss_fn(fake_output_loss, real_output)
@@ -1237,15 +1237,19 @@ class Trainer():
             # rec_loss = rec_loss / self.gradient_accumulate_every  #TODO: Gradient accumulation for reconstruction loss
             gen_loss.register_hook(raise_if_nan)
 
-  
-            backwards(gen_loss, self.GAN.G_opt, loss_id=2)
-            backwards(rec_loss, self.GAN.G.opt, loss_id=3)
-            backwards(kl_loss, self.GAN.G.opt, loss_id=4)
+            backwards(gen_loss, self.GAN.G_opt, loss_id=2, retain_graph=True)
+            backwards(rec_loss, self.GAN.G_opt, loss_id=3, retain_graph=True)
+            backwards(kl_loss, self.GAN.G_opt, loss_id=4)
 
             total_gen_loss += loss.detach().item() / self.gradient_accumulate_every
+            total_rec_loss += rec_loss.detach().item()
+            total_kl_loss += kl_loss.detach().item()
+
 
         self.g_loss = float(total_gen_loss)
         self.track(self.g_loss, 'G')
+        self.track(total_rec_loss, 'Rec')
+        self.track(total_kl_loss, 'KL')
 
         self.GAN.G_opt.step()
 
