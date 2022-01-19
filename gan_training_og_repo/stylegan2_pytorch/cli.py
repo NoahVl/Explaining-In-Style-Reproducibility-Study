@@ -77,7 +77,7 @@ def train_from_folder(
         data='./mnist_images',  # Used to be data TODO: change back
         results_dir='./results',
         models_dir='./models',
-        name='mnist_2',  # Used to be 'default' (FFHQ) on my pc TODO: change back
+        name='mnist_3',  # Used to be 'default' (FFHQ) on my pc TODO: change back
         new=False,
         load_from=-1,
         image_size=32,
@@ -125,6 +125,7 @@ def train_from_folder(
         classifier_model_name="mnist.pth",  # TODO: Used to be FFHQ-Gender.pth
         classifier_classes=10,  # TODO: Is 2 for faces gender.
         sample_from_encoder=True,  # TODO: Default is False
+        tensorboard_dir="tb_logs_stylex",  # TODO: None for not logging
 ):
     model_args = dict(
         name=name,
@@ -166,7 +167,8 @@ def train_from_folder(
         log=log,
         classifier_model_name=classifier_model_name,
         classifier_classes=classifier_classes,
-        sample_from_encoder=sample_from_encoder
+        sample_from_encoder=sample_from_encoder,
+        tensorboard_dir=tensorboard_dir,
     )
 
     if generate:

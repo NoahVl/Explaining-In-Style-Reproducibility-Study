@@ -5,6 +5,7 @@ import fire
 import json
 
 import lpips
+from torch.utils.tensorboard import SummaryWriter
 
 from tqdm import tqdm
 from math import floor, log2
@@ -393,11 +394,11 @@ def reconstruction_loss(encoder_batch: torch.Tensor, generated_images: torch.Ten
     return loss
 
 def classifier_kl_loss(real_classifier_logits, fake_classifier_logits):
-    # Convert logits to softmax and then KL loss
-    real_classifier_probabilities = F.softmax(real_classifier_logits, dim=1)
-    fake_classifier_probabilities = F.softmax(fake_classifier_logits, dim=1)
+    # Convert logits to log_softmax and then KL loss
+    real_classifier_probabilities = F.log_softmax(real_classifier_logits, dim=1)
+    fake_classifier_probabilities = F.log_softmax(fake_classifier_logits, dim=1)
 
-    loss = kl_loss(fake_classifier_logits, real_classifier_logits)
+    loss = kl_loss(fake_classifier_probabilities, real_classifier_probabilities)
     return loss
 
 # dataset
@@ -922,6 +923,7 @@ class Trainer():
             classifier_model_name="mnist.pth", #TODO: Used to be FFHQ-Gender.pth,
             classifier_classes=10,  # TODO: Used to be 2 for faces gender.
             sample_from_encoder=False,
+            tensorboard_dir=None,
             *args,
             **kwargs
     ):
@@ -1016,6 +1018,12 @@ class Trainer():
         # Load classifier
         self.classifier_classes = classifier_classes
         self.classifier = MobileNet(classifier_model_name, cuda_rank=rank, output_size=self.classifier_classes)  # Automatically put into eval mode
+
+        # Load tensorboard, create writer
+        self.tb_writer = None
+        if exists(tensorboard_dir):
+            self.tb_writer = SummaryWriter(tensorboard_dir)
+
 
     @property
     def image_extension(self):
@@ -1266,6 +1274,13 @@ class Trainer():
         self.total_rec_loss = float(total_rec_loss)
         self.total_kl_loss = float(total_kl_loss)
 
+        # If writer exists, write losses
+        if exists(self.tb_writer):
+            self.tb_writer.add_scalar('loss/G', self.g_loss, self.steps)
+            self.tb_writer.add_scalar('loss/D', self.d_loss, self.steps)
+            self.tb_writer.add_scalar('loss/rec', self.total_rec_loss, self.steps)
+            self.tb_writer.add_scalar('loss/kl', self.total_kl_loss, self.steps)
+
         self.track(self.g_loss, 'G')
         self.track(self.total_rec_loss, 'Rec')
         self.track(self.total_kl_loss, 'KL')
@@ -1314,7 +1329,8 @@ class Trainer():
     @torch.no_grad()
     def evaluate(self, encoder_input=False, num=0, trunc=1.0):
         self.GAN.eval()
-        ext = self.image_extension
+        # ext = self.image_extension  TODO: originally only png if self.transparency was enabled
+        ext = "png"
         num_rows = self.num_image_tiles
 
         latent_dim = self.GAN.G.latent_dim
@@ -1334,7 +1350,7 @@ class Trainer():
         if encoder_input:
             from_encoder_string = "from_encoder"
             image_batch = next(self.loader).cuda(self.rank)
-            
+
             with torch.no_grad():
                 real_classified_logits = self.classifier.classify_images(image_batch)
                 w = [(torch.cat((self.GAN.encoder(image_batch), real_classified_logits), dim=1), num_layers)]
@@ -1345,13 +1361,13 @@ class Trainer():
         # pass images here
 
         generated_images = self.generate_truncated(self.GAN.S, self.GAN.G, latents, n, w=w, trunc_psi=self.trunc_psi)
-        torchvision.utils.save_image(torch.cat((generated_images, image_batch)), str(self.results_dir / self.name / f'{str(num)}-{from_encoder_string}.{ext}'),
+        torchvision.utils.save_image(torch.cat((image_batch, generated_images)), str(self.results_dir / self.name / f'{str(num)}-{from_encoder_string}.{ext}'),
                                     nrow=num_rows)
 
         # moving averages
 
         generated_images = self.generate_truncated(self.GAN.SE, self.GAN.GE, latents, n, w=w, trunc_psi=self.trunc_psi)
-        torchvision.utils.save_image(torch.cat((generated_images, image_batch)), str(self.results_dir / self.name / f'{str(num)}-{from_encoder_string}-ema.{ext}'),
+        torchvision.utils.save_image(torch.cat((image_batch, generated_images)), str(self.results_dir / self.name / f'{str(num)}-{from_encoder_string}-ema.{ext}'),
                                     nrow=num_rows)
 
         # mixing regularities
@@ -1373,7 +1389,7 @@ class Trainer():
         mixed_latents = [(tmp1, tt), (tmp2, num_layers - tt)]
 
         generated_images = self.generate_truncated(self.GAN.SE, self.GAN.GE, mixed_latents, n, trunc_psi=self.trunc_psi)
-        torchvision.utils.save_image(torch.cat((generated_images, image_batch)), str(self.results_dir / self.name / f'{str(num)}-{from_encoder_string}-mr.{ext}'),
+        torchvision.utils.save_image(torch.cat((image_batch, generated_images)), str(self.results_dir / self.name / f'{str(num)}-{from_encoder_string}-mr.{ext}'),
                                      nrow=num_rows)
 
     @torch.no_grad()
@@ -1451,7 +1467,7 @@ class Trainer():
     def generate_truncated(self, S, G, style, noi, w=None, trunc_psi=0.75, num_image_tiles=8):
         if w is None:
             w = map(lambda t: (S(t[0]), t[1]), style)
-        
+
         w_truncated = self.truncate_style_defs(w, trunc_psi=trunc_psi)
         w_styles = styles_def_to_tensor(w_truncated)
         generated_images = evaluate_in_chunks(self.batch_size, G, w_styles, noi)
