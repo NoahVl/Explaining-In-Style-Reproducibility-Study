@@ -8,7 +8,7 @@ from torchvision import transforms
 
 
 class FFHQ(data.Dataset):
-    def __init__(self, root, label="gender"):
+    def __init__(self, root, label="gender", gan_train_resolution=64):
         """
         PyTorch DataSet for the FFHQ-Age dataset.
         :param root: Root folder that contains a directory for the dataset and the csv with labels in the root directory.
@@ -26,6 +26,7 @@ class FFHQ(data.Dataset):
 
         # Image transformation
         self.transform = transforms.Compose([
+            transforms.Resize(gan_train_resolution),
             transforms.Resize(224),  # Used to be resize 256
             # transforms.CenterCrop(224),
             transforms.ToTensor(),
