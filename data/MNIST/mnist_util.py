@@ -31,8 +31,7 @@ def mnist_train_valid_test_dataset(download_dir, valid_ratio=0.15):
 
     mobile_net_transform = transforms.Compose([
             convert_to_rgb,
-            transforms.Resize(256),
-            transforms.CenterCrop(224),
+            transforms.Resize(224),
             transforms.ToTensor(),
             transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]),
         ])
