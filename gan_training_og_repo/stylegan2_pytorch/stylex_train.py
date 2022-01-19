@@ -383,7 +383,7 @@ def reconstruction_loss(encoder_batch: torch.Tensor, generated_images: torch.Ten
     generated_images_norm = lpips_normalize(generated_images)
 
     # LPIPS reconstruction loss
-    loss = lpips_loss(encoder_batch_norm, generated_images_norm).mean() + l1_loss(encoder_w, generated_images_w) + l1_loss(encoder_batch, generated_images)
+    loss = 0.1 * lpips_loss(encoder_batch_norm, generated_images_norm).mean() + 0.1 * l1_loss(encoder_w, generated_images_w) + 1 * l1_loss(encoder_batch, generated_images)
     return loss
 
 def classifier_kl_loss(real_classifier_logits, fake_classifier_logits):
@@ -911,6 +911,7 @@ class Trainer():
             log=False,
             classifier_model_name="mnist.pth", #TODO: Used to be FFHQ-Gender.pth,
             classifier_classes=10,  # TODO: Used to be 2 for faces gender.
+            sample_from_encoder=False,
             *args,
             **kwargs
     ):
@@ -998,6 +999,7 @@ class Trainer():
         self.is_main = rank == 0
         self.rank = rank
         self.world_size = world_size
+        self.sample_from_encoder = sample_from_encoder
 
         self.logger = aim.Session(experiment=name) if log else None
 
@@ -1221,7 +1223,7 @@ class Trainer():
                     fake_output_loss, _ = fake_output_loss.topk(k=k, largest=False)
 
             # Our losses
-            rec_loss = 0.1 * reconstruction_loss(image_batch, generated_images, self.GAN.encoder(generated_images), encoder_output)
+            rec_loss = reconstruction_loss(image_batch, generated_images, self.GAN.encoder(generated_images), encoder_output)
             kl_loss = 0.0001 * classifier_kl_loss(real_classified_logits, gen_image_classified_logits)
 
             # Original loss
@@ -1286,7 +1288,7 @@ class Trainer():
                 self.save(self.checkpoint_num)
 
             if self.steps % self.evaluate_every == 0 or (self.steps % 100 == 0 and self.steps < 2500):
-                self.evaluate(floor(self.steps / self.evaluate_every))
+                self.evaluate(encoder_input=self.sample_from_encoder, num=floor(self.steps / self.evaluate_every))
 
             if exists(self.calculate_fid_every) and self.steps % self.calculate_fid_every == 0 and self.steps != 0:
                 num_batches = math.ceil(self.calculate_fid_num_images / self.batch_size)
@@ -1300,7 +1302,7 @@ class Trainer():
         self.av = None
 
     @torch.no_grad()
-    def evaluate(self, num=0, trunc=1.0):
+    def evaluate(self, encoder_input=False, num=0, trunc=1.0):
         self.GAN.eval()
         ext = self.image_extension
         num_rows = self.num_image_tiles
@@ -1309,22 +1311,38 @@ class Trainer():
         image_size = self.GAN.G.image_size
         num_layers = self.GAN.G.num_layers
 
+
         # latents and noise
 
         latents = noise_list(num_rows ** 2, num_layers, latent_dim, device=self.rank)
         n = image_noise(num_rows ** 2, image_size, device=self.rank)
 
         # regular
+        from_encoder_string = ""
+        image_batch = None
 
-        generated_images = self.generate_truncated(self.GAN.S, self.GAN.G, latents, n, trunc_psi=self.trunc_psi)
-        torchvision.utils.save_image(generated_images, str(self.results_dir / self.name / f'{str(num)}.{ext}'),
-                                     nrow=num_rows)
+        if encoder_input:
+            from_encoder_string = "from_encoder"
+            image_batch = next(self.loader).cuda(self.rank)
+            
+            with torch.no_grad():
+                real_classified_logits = self.classifier.classify_images(image_batch)
+                w = [(torch.cat((self.GAN.encoder(image_batch), real_classified_logits), dim=1), num_layers)]
+            num_rows = len(image_batch)
+        else:
+            w = None
+
+        # pass images here
+
+        generated_images = self.generate_truncated(self.GAN.S, self.GAN.G, latents, n, w=w, trunc_psi=self.trunc_psi)
+        torchvision.utils.save_image(torch.cat((generated_images, image_batch)), str(self.results_dir / self.name / f'{str(num)}-{from_encoder_string}.{ext}'),
+                                    nrow=num_rows)
 
         # moving averages
 
-        generated_images = self.generate_truncated(self.GAN.SE, self.GAN.GE, latents, n, trunc_psi=self.trunc_psi)
-        torchvision.utils.save_image(generated_images, str(self.results_dir / self.name / f'{str(num)}-ema.{ext}'),
-                                     nrow=num_rows)
+        generated_images = self.generate_truncated(self.GAN.SE, self.GAN.GE, latents, n, w=w, trunc_psi=self.trunc_psi)
+        torchvision.utils.save_image(torch.cat((generated_images, image_batch)), str(self.results_dir / self.name / f'{str(num)}-{from_encoder_string}-ema.{ext}'),
+                                    nrow=num_rows)
 
         # mixing regularities
 
@@ -1345,7 +1363,7 @@ class Trainer():
         mixed_latents = [(tmp1, tt), (tmp2, num_layers - tt)]
 
         generated_images = self.generate_truncated(self.GAN.SE, self.GAN.GE, mixed_latents, n, trunc_psi=self.trunc_psi)
-        torchvision.utils.save_image(generated_images, str(self.results_dir / self.name / f'{str(num)}-mr.{ext}'),
+        torchvision.utils.save_image(torch.cat((generated_images, image_batch)), str(self.results_dir / self.name / f'{str(num)}-{from_encoder_string}-mr.{ext}'),
                                      nrow=num_rows)
 
     @torch.no_grad()
@@ -1420,8 +1438,10 @@ class Trainer():
         return w_space
 
     @torch.no_grad()
-    def generate_truncated(self, S, G, style, noi, trunc_psi=0.75, num_image_tiles=8):
-        w = map(lambda t: (S(t[0]), t[1]), style)
+    def generate_truncated(self, S, G, style, noi, w=None, trunc_psi=0.75, num_image_tiles=8):
+        if w is None:
+            w = map(lambda t: (S(t[0]), t[1]), style)
+        
         w_truncated = self.truncate_style_defs(w, trunc_psi=trunc_psi)
         w_styles = styles_def_to_tensor(w_truncated)
         generated_images = evaluate_in_chunks(self.batch_size, G, w_styles, noi)
