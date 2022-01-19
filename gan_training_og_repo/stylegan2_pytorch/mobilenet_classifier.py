@@ -6,7 +6,7 @@ import torch.nn.functional as F
 from torchvision.transforms import transforms
 
 
-def load_classifier(model_name: str, cuda_rank: int) -> torch.nn.Module:
+def load_classifier(model_name: str, cuda_rank: int, output_size: int = 2) -> torch.nn.Module:
     """
     Returns a MobileNet model with pretrained weights using the model name.
     """
@@ -17,8 +17,8 @@ def load_classifier(model_name: str, cuda_rank: int) -> torch.nn.Module:
     # Load the pretrained mobilenet model
     model = torch.hub.load('pytorch/vision:v0.10.0', 'mobilenet_v2', pretrained=True).to(device)
 
-    # Make the last layer have only 2 outputs instead of 1000.
-    model.classifier[1] = nn.Linear(1280, 2).to(device)
+    # Make the last layer have only output_size outputs instead of 1000.
+    model.classifier[1] = nn.Linear(1280, output_size).to(device)
 
     # Load the weights from the checkpoint.
     model.load_state_dict(torch.load(os.path.join("saved_classifiers", model_name), map_location=device))
@@ -27,8 +27,8 @@ def load_classifier(model_name: str, cuda_rank: int) -> torch.nn.Module:
 
 
 class MobileNet():
-    def __init__(self, model_name: str, cuda_rank: int):
-        self.model = load_classifier(model_name, cuda_rank)
+    def __init__(self, model_name: str, cuda_rank: int, output_size: int = 2):
+        self.model = load_classifier(model_name, cuda_rank, output_size)
 
         self.mobilenet_dim = 224
 
