@@ -20,12 +20,8 @@ class MNISTOneVersusAll(data.Dataset):
         self.train = train
         self.index = 0
 
-        if train:
-            self.dataset = datasets.MNIST(root=self.root, train=True, download=self.download,
-                                          transform=transform)
-        else:
-            self.dataset = datasets.MNIST(root=self.root, train=False, download=self.download,
-                                          transform=transform)
+        self.dataset = datasets.MNIST(root=self.root, train=train, download=self.download,
+                                      transform=transform)
 
     def __getitem__(self, index):
         # Get image and label
@@ -87,6 +83,6 @@ def mnist_train_valid_test_dataset(download_dir, target=8, valid_ratio=0.15):
                                                    generator=torch.Generator().manual_seed(42)
                                                    )
 
-    test_dataset = datasets.MNIST(root=download_dir, train=False, download=True, transform=mobile_net_transform)
+    test_dataset = MNISTOneVersusAll(root=download_dir, target=target, train=False, transform=mobile_net_transform)
 
     return train_dataset, val_dataset, test_dataset

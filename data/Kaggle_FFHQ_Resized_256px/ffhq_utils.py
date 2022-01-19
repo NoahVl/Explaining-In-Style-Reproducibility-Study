@@ -8,10 +8,10 @@ from torchvision import transforms
 from data.Kaggle_FFHQ_Resized_256px.data_loader import FFHQ
 
 
-def get_train_valid_test_dataset(data_dir, label, valid_ratio=0.15, test_ratio=0.15):
+def get_train_valid_test_dataset(data_dir, label, gan_train_resolution=32, valid_ratio=0.15, test_ratio=0.15):
     # TODO: Specify different training routines here per class (such as random crop, random horizontal flip, etc.)
 
-    dataset = FFHQ(data_dir, label)
+    dataset = FFHQ(data_dir, label, gan_train_resolution=gan_train_resolution)
     train_length, valid_length, test_length = int(len(dataset) * (1 - valid_ratio - test_ratio)), \
                                               int(len(dataset) * valid_ratio), int(len(dataset) * test_ratio)
     # Make sure that the lengths sum to the total length of the dataset

@@ -381,7 +381,7 @@ def dual_contrastive_loss(real_logits, fake_logits):
 # Our losses
 lpips_loss = lpips.LPIPS(net="alex").cuda(0)  # image should be RGB, IMPORTANT: normalized to [-1,1]
 l1_loss = nn.L1Loss()
-kl_loss = nn.KLDivLoss(reduction="batchmean")
+kl_loss = nn.KLDivLoss(reduction="batchmean", log_target=True)
 
 
 def reconstruction_loss(encoder_batch: torch.Tensor, generated_images: torch.Tensor, generated_images_w: torch.Tensor,

@@ -250,7 +250,7 @@ def main(args: argparse.Namespace):
 
     if args.dataset == "FFHQ-Aging":
         train_dataset, valid_dataset, test_dataset = ffhq_utils.get_train_valid_test_dataset(
-            "data/Kaggle_FFHQ_Resized_256px", "gender")
+            "data/Kaggle_FFHQ_Resized_256px", "gender", gan_train_resolution=args.gan_train_resolution)
     elif args.dataset == "MNIST":
         train_dataset, valid_dataset, test_dataset = mnist_util.mnist_train_valid_test_dataset("data/MNIST/data", target=8)
     else:
@@ -287,6 +287,7 @@ if __name__ == "__main__":
 
     # Dataset
     parser.add_argument("--dataset", type=str, default="FFHQ-Aging", help="Dataset to train on")
+    parser.add_argument("--gan_train_resolution", type=int, default=32, help="Resolution to train on")
 
     # Labels
     parser.add_argument("--labels", type=str, default="gender", help="Labels to train on")
@@ -302,7 +303,7 @@ if __name__ == "__main__":
                         help='Max number of epochs')
     parser.add_argument('--seed', default=42, type=int,
                         help='Seed to use for reproducing results')
-    parser.add_argument('--checkpoint_name', default="FFHQ-Gender.pth", type=str, help="Name of the model checkpoint")
+    parser.add_argument('--checkpoint_name', default="FFHQ-Gender_res32.pth", type=str, help="Name of the model checkpoint")
     parser.add_argument('--continue_training', dest="continue_training", action="store_true")
 
     # Parse and pass to main
