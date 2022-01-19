@@ -346,7 +346,13 @@ def slerp(val, low, high):
 
 
 def lpips_normalize(images):
-    return images / torch.max(images, dim=0)[0] * 2 - 1
+    """
+    Function that scales images to be in range [-1, 1] (needed for LPIPS alex model)
+    """
+    images_flattened = images.view(images.shape[0], -1)
+    _max = images_flattened.max(dim=1)[0].view(-1, 1, 1, 1)
+    _min = images_flattened.min(dim=1)[0].view(-1, 1, 1, 1)
+    return (images - _min) / (_max - _min) * 2 - 1
 
 # losses
 

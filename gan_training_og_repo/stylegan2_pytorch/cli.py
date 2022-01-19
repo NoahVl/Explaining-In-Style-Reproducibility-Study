@@ -74,10 +74,10 @@ def run_training(rank, world_size, model_args, data, load_from, new, num_train_s
 
 
 def train_from_folder(
-        data='./data',  # Used to be data TODO: change back
+        data='./mnist_images',  # Used to be data TODO: change back
         results_dir='./results',
         models_dir='./models',
-        name='default',  # Used to be 'default' (FFHQ) on my pc TODO: change back
+        name='mnist_2',  # Used to be 'default' (FFHQ) on my pc TODO: change back
         new=False,
         load_from=-1,
         image_size=32,
@@ -122,9 +122,9 @@ def train_from_folder(
         clear_fid_cache=False,
         seed=42,
         log=False,
-        classifier_model_name="FFHQ-Gender.pth", #TODO: Used to be FFHQ-Gender.pth
-        classifier_classes=2,  # TODO: Is 2 for faces gender.
-        sample_from_encoder=True, #TODO: Default is False
+        classifier_model_name="mnist.pth",  # TODO: Used to be FFHQ-Gender.pth
+        classifier_classes=10,  # TODO: Is 2 for faces gender.
+        sample_from_encoder=True,  # TODO: Default is False
 ):
     model_args = dict(
         name=name,

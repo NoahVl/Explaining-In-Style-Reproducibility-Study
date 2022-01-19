@@ -228,7 +228,7 @@ def load_mobilenet(device, class_labels=2, amount_frozen_layers=15, freeze_all_l
         for param in model.parameters():
             param.requires_grad = False
 
-    # Make the last layer have only 2 outputs instead of 1000.
+    # Make the last layer have only {class_labels} outputs instead of 1000.
     model.classifier[1] = nn.Linear(1280, class_labels).to(device)
 
     # If you want to only freeze a few layers, you can do this:
