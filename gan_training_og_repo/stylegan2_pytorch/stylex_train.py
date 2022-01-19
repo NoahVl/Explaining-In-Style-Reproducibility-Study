@@ -393,6 +393,10 @@ def reconstruction_loss(encoder_batch: torch.Tensor, generated_images: torch.Ten
     return loss
 
 def classifier_kl_loss(real_classifier_logits, fake_classifier_logits):
+    # Convert logits to softmax and then KL loss
+    real_classifier_probabilities = F.softmax(real_classifier_logits, dim=1)
+    fake_classifier_probabilities = F.softmax(fake_classifier_logits, dim=1)
+
     loss = kl_loss(fake_classifier_logits, real_classifier_logits)
     return loss
 
@@ -1230,7 +1234,7 @@ class Trainer():
 
             # Our losses
             rec_loss = reconstruction_loss(image_batch, generated_images, self.GAN.encoder(generated_images), encoder_output)
-            kl_loss = 0.0001 * classifier_kl_loss(real_classified_logits, gen_image_classified_logits)
+            kl_loss = classifier_kl_loss(real_classified_logits, gen_image_classified_logits)
 
             # Original loss
             loss = G_loss_fn(fake_output_loss, real_output)
