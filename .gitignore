@@ -3,6 +3,22 @@ __pycache__/
 *.py[cod]
 *$py.class
 
+
+# Saved models
+
+*.ckpt
+*.pth
+*.pt
+
+stylex/models/*
+stylex/trained_classifiers/*
+
+
+# Image results
+
+stylex/results/*
+
+
 # C extensions
 *.so
 
