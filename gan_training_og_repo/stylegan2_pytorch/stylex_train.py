@@ -54,7 +54,7 @@ assert torch.cuda.is_available(), 'You need to have an Nvidia GPU with CUDA inst
 from mobilenet_classifier import MobileNet
 
 # Debug Encoder
-from debug_encoder import DebugEncoder
+from debug_encoder import DebugEncoder, PhillipEncoder
 
 # constants
 
@@ -399,6 +399,7 @@ def classifier_kl_loss(real_classifier_logits, fake_classifier_logits):
     fake_classifier_probabilities = F.log_softmax(fake_classifier_logits, dim=1)
 
     loss = kl_loss(fake_classifier_probabilities, real_classifier_probabilities)
+
     return loss
 
 # dataset
@@ -814,6 +815,7 @@ class StyleGAN2(nn.Module):
 
         # Create encoder
         # TODO: Make it 512 again once we figure out where they 512 + 2 to 512.
+        # self.encoder = PhillipEncoder(num_input_channels=3, base_channel_size=32, latent_dim=512 - classifier_labels).cuda(rank)
         self.encoder = DebugEncoder(image_size=image_size, latent_size=512 - classifier_labels).cuda(rank)
 
         # Is turned off by default
@@ -1242,7 +1244,7 @@ class Trainer():
 
             # Our losses
             rec_loss = reconstruction_loss(image_batch, generated_images, self.GAN.encoder(generated_images), encoder_output)
-            kl_loss = classifier_kl_loss(real_classified_logits, gen_image_classified_logits)
+            kl_loss = 0.01 * classifier_kl_loss(real_classified_logits, gen_image_classified_logits)
 
             # Original loss
             loss = G_loss_fn(fake_output_loss, real_output)
@@ -1258,7 +1260,8 @@ class Trainer():
                         gen_loss = gen_loss + pl_loss
 
             gen_loss = gen_loss / self.gradient_accumulate_every
-            # rec_loss = rec_loss / self.gradient_accumulate_every  #TODO: Gradient accumulation for reconstruction loss
+            rec_loss = rec_loss / self.gradient_accumulate_every  #TODO: Gradient accumulation for reconstruction loss
+            kl_loss = kl_loss / self.gradient_accumulate_every
             gen_loss.register_hook(raise_if_nan)
 
             backwards(gen_loss, self.GAN.G_opt, loss_id=2, retain_graph=True)
@@ -1266,8 +1269,8 @@ class Trainer():
             backwards(kl_loss, self.GAN.G_opt, loss_id=4)
 
             total_gen_loss += loss.detach().item() / self.gradient_accumulate_every
-            total_rec_loss += rec_loss.detach().item()
-            total_kl_loss += kl_loss.detach().item()
+            total_rec_loss += rec_loss.detach().item() / self.gradient_accumulate_every
+            total_kl_loss += kl_loss.detach().item() / self.gradient_accumulate_every
 
 
         self.g_loss = float(total_gen_loss)

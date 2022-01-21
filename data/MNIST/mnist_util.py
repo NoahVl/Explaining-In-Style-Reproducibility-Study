@@ -49,7 +49,7 @@ def convert_to_rgb(image):
     return image
 
 
-def mnist_train_valid_test_dataset(download_dir, target=8, valid_ratio=0.15):
+def mnist_train_valid_test_dataset(download_dir, use_all_classes=False, target=8, valid_ratio=0.15):
     """
     Imports the MNIST dataset from the PyTorch hub.
     """
@@ -74,7 +74,15 @@ def mnist_train_valid_test_dataset(download_dir, target=8, valid_ratio=0.15):
         transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]),
     ])
 
-    mnist_train = MNISTOneVersusAll(root=download_dir, target=target, train=True, transform=mobile_net_transform)
+    if use_all_classes:
+        mnist_train = datasets.MNIST(root=download_dir, train=True, download=True, transform=mobile_net_transform)
+        test_dataset = datasets.MNIST(root=download_dir, train=False, download=True, transform=mobile_net_transform)
+        num_classes = 10
+    else:
+        mnist_train = MNISTOneVersusAll(root=download_dir, target=target, train=True, transform=mobile_net_transform)
+        test_dataset = MNISTOneVersusAll(root=download_dir, target=target, train=False, transform=mobile_net_transform)
+        num_classes = 2
+
     valid_length = int(len(mnist_train) * valid_ratio)
     train_length = len(mnist_train) - valid_length
 
@@ -83,6 +91,4 @@ def mnist_train_valid_test_dataset(download_dir, target=8, valid_ratio=0.15):
                                                    generator=torch.Generator().manual_seed(42)
                                                    )
 
-    test_dataset = MNISTOneVersusAll(root=download_dir, target=target, train=False, transform=mobile_net_transform)
-
-    return train_dataset, val_dataset, test_dataset
+    return train_dataset, val_dataset, test_dataset, num_classes

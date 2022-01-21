@@ -74,10 +74,10 @@ def run_training(rank, world_size, model_args, data, load_from, new, num_train_s
 
 
 def train_from_folder(
-        data='./mnist_images',  # Used to be data TODO: change back
+        data='./data',  # Used to be data TODO: change back
         results_dir='./results',
         models_dir='./models',
-        name='mnist_4_proper_kl',  # Used to be 'default' (FFHQ) on my pc TODO: change back
+        name='Faces_scaled_losses_lr4',  # Used to be 'default' (FFHQ) on my pc TODO: change back
         new=False,
         load_from=-1,
         image_size=32,
@@ -87,12 +87,12 @@ def train_from_folder(
         batch_size=5,
         gradient_accumulate_every=6,
         num_train_steps=150000,
-        learning_rate=2e-4,
+        learning_rate=2e-4,  #TODO: Was 2e-4
         lr_mlp=0.1,
         ttur_mult=1.5,
         rel_disc_loss=False,
         num_workers=4,  # None
-        save_every=1000,  # 1000
+        save_every=500,  # 1000
         evaluate_every=50,  # 1000
         generate=False,
         num_generate=1,
@@ -122,7 +122,7 @@ def train_from_folder(
         clear_fid_cache=False,
         seed=42,
         log=False,
-        classifier_model_name="mnist.pth",  # TODO: Used to be FFHQ-Gender.pth
+        classifier_model_name="FFHQ-Gender_res32.pth",  # TODO: Used to be FFHQ-Gender.pth
         classifier_classes=2,  # TODO: Is 2 for faces gender.
         sample_from_encoder=True,  # TODO: Default is False
         tensorboard_dir="tb_logs_stylex",  # TODO: None for not logging

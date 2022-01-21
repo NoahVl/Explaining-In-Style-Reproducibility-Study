@@ -13,6 +13,7 @@ from torch.utils.data import DataLoader
 from data.Kaggle_FFHQ_Resized_256px import ffhq_utils
 from data.MNIST import mnist_util
 
+
 def set_seed(seed):
     """
     Function for setting the seed for reproducibility.
@@ -214,7 +215,7 @@ def test_model(model, batch_size, device, seed, test_dataset):
     return test_results
 
 
-def load_mobilenet(device, amount_frozen_layers=15, freeze_all_layer=False):
+def load_mobilenet(device, amount_frozen_layers=15, freeze_all_layer=False, num_classes=2):
     """
     Returns a MobileNet model.
     :param device: Device to put the model on.
@@ -228,8 +229,8 @@ def load_mobilenet(device, amount_frozen_layers=15, freeze_all_layer=False):
         for param in model.parameters():
             param.requires_grad = False
 
-    # Make the last layer have only 2 outputs instead of 1000.
-    model.classifier[1] = nn.Linear(1280, 2).to(device)
+    # Make the last layer have only {num_classes} outputs instead of 1000.
+    model.classifier[1] = nn.Linear(1280, num_classes).to(device)
 
     # If you want to only freeze a few layers, you can do this:
     for layer in range(amount_frozen_layers):
@@ -251,12 +252,16 @@ def main(args: argparse.Namespace):
     if args.dataset == "FFHQ-Aging":
         train_dataset, valid_dataset, test_dataset = ffhq_utils.get_train_valid_test_dataset(
             "data/Kaggle_FFHQ_Resized_256px", "gender", gan_train_resolution=args.gan_train_resolution)
+        num_classes = 2
     elif args.dataset == "MNIST":
-        train_dataset, valid_dataset, test_dataset = mnist_util.mnist_train_valid_test_dataset("data/MNIST/data", target=8)
+        train_dataset, valid_dataset, test_dataset, num_classes = mnist_util.mnist_train_valid_test_dataset(
+            "data/MNIST/data",
+            use_all_classes=args.use_all_classes,
+            target=8)
     else:
         raise NotImplementedError
 
-    model = load_mobilenet(device, args.amount_frozen_layers, args.freeze_all_layers)
+    model = load_mobilenet(device, args.amount_frozen_layers, args.freeze_all_layers, num_classes)
 
     # Check if model was already trained, if it was import it, if not train it
     if not os.path.exists(os.path.join("saved_models", args.checkpoint_name)):
@@ -284,6 +289,7 @@ if __name__ == "__main__":
     # Model
     parser.add_argument("--freeze_all_layers", dest="freeze_all_layers", action="store_true")
     parser.add_argument("--amount_frozen_layers", dest="amount_frozen_layers", type=int, default=15)
+    parser.add_argument("--use_all_classes", dest="use_all_classes", action="store_true")
 
     # Dataset
     parser.add_argument("--dataset", type=str, default="FFHQ-Aging", help="Dataset to train on")
@@ -303,7 +309,8 @@ if __name__ == "__main__":
                         help='Max number of epochs')
     parser.add_argument('--seed', default=42, type=int,
                         help='Seed to use for reproducing results')
-    parser.add_argument('--checkpoint_name', default="FFHQ-Gender_res32.pth", type=str, help="Name of the model checkpoint")
+    parser.add_argument('--checkpoint_name', default="FFHQ-Gender_res32.pth", type=str,
+                        help="Name of the model checkpoint")
     parser.add_argument('--continue_training', dest="continue_training", action="store_true")
 
     # Parse and pass to main
