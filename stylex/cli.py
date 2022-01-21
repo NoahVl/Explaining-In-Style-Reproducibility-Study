@@ -86,7 +86,7 @@ def train_from_folder(
         fmap_max=512,   # 512
         transparent=False,
         batch_size=5,
-        gradient_accumulate_every=6,
+        gradient_accumulate_every=2,
         num_train_steps=150000,
         learning_rate=2e-4,
         lr_mlp=0.1,
@@ -127,6 +127,7 @@ def train_from_folder(
         classifier_classes=2,  # TODO: Is 2 for faces gender.
         encoder_class=None,
         sample_from_encoder=True,  # TODO: Default is False
+        alternating_training=True,
         tensorboard_dir="tb_logs_stylex",  # TODO: None for not logging
 ):
 
@@ -172,6 +173,7 @@ def train_from_folder(
         classifier_classes=classifier_classes,
         encoder_class=encoder_class,
         sample_from_encoder=sample_from_encoder,
+        alternating_training=alternating_training,
         tensorboard_dir=tensorboard_dir,
     )
 

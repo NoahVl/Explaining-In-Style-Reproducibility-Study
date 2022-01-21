@@ -10,6 +10,12 @@ __pycache__/
 *.pth
 *.pt
 
+# Tensorboard logs
+
+stylex/tb_logs_stylex/*
+
+# TRained models
+
 stylex/models/*
 stylex/trained_classifiers/*
 

@@ -945,6 +945,7 @@ class Trainer():
             classifier_model_name="mnist.pth", #TODO: Used to be FFHQ-Gender.pth,
             classifier_classes=10,  # TODO: Used to be 2 for faces gender.
             encoder_class=None,
+            alternating_training=True,
             sample_from_encoder=False,
             tensorboard_dir=None,
             *args,
@@ -952,6 +953,8 @@ class Trainer():
     ):
         self.model_params = [args, kwargs]
         self.StylEx = None
+
+        self.alternating_training=alternating_training
 
         self.name = name
 
@@ -1161,34 +1164,46 @@ class Trainer():
             G_loss_fn = dual_contrastive_loss
             G_requires_reals = True
 
+
+
+
+
         # train discriminator
 
         avg_pl_length = self.pl_mean
         self.StylEx.D_opt.zero_grad()
 
-        for i in gradient_accumulate_contexts(self.gradient_accumulate_every, self.is_ddp, ddps=[D_aug, S, G]):
-            # Original style input
-            # get_latents_fn = mixed_list if random() < self.mixed_prob else noise_list
-            # style = get_latents_fn(batch_size, num_layers, latent_dim, device=self.rank)
+        if self.alternating_training:
+            encoder_input = False
 
-            encoder_batch = next(self.loader).cuda(self.rank)
+        for i in gradient_accumulate_contexts(self.gradient_accumulate_every, self.is_ddp, ddps=[D_aug, S, G]):
             discriminator_batch = next(self.loader).cuda(self.rank)
-            encoder_batch.requires_grad_()
             discriminator_batch.requires_grad_()
 
-            # get_latents_fn = mixed_list if random() < self.mixed_prob else noise_list
-            encoder_output = self.StylEx.encoder(encoder_batch)[0]
-            real_classified_logits = self.classifier.classify_images(encoder_batch)
-            style = [(torch.cat((encoder_output, real_classified_logits), dim=1),
-                      self.StylEx.G.num_layers)]  # Has to be bracketed because expects a noise mix
-            noise = image_noise(batch_size, image_size, device=self.rank)
+            if self.alternating_training and encoder_input:
+                encoder_batch = next(self.loader).cuda(self.rank)
+                encoder_batch.requires_grad_()
 
-            # w_space = latent_to_w(S, style)
-            # w_styles = styles_def_to_tensor(w_space)
-            # 6 layers, batch_size 5 produces (5, 6, 512) style tensor after going through StyleVectorizer
-            # Layer size of discriminator is linked to image size, likely because of upsampling.
-            w_styles = styles_def_to_tensor(style)
+                encoder_output = self.StylEx.encoder(encoder_batch)[0]
+                real_classified_logits = self.classifier.classify_images(encoder_batch)
+                style = [(torch.cat((encoder_output, real_classified_logits), dim=1),
+                        self.StylEx.G.num_layers)]  # Has to be bracketed because expects a noise mix
+                noise = image_noise(batch_size, image_size, device=self.rank)
 
+
+                w_styles = styles_def_to_tensor(style)
+
+                encoder_input = False
+            else:
+                get_latents_fn = mixed_list if random() < self.mixed_prob else noise_list
+                style = get_latents_fn(batch_size, num_layers, latent_dim, device=self.rank)
+                noise = image_noise(batch_size, image_size, device=self.rank)
+
+                w_space = latent_to_w(S, style)
+                w_styles = styles_def_to_tensor(w_space)
+
+                if self.alternating_training:
+                    encoder_input=True
             generated_images = G(w_styles, noise)
             fake_output, fake_q_loss = D_aug(generated_images.clone().detach(), detach=True, **aug_kwargs)
 
@@ -1229,20 +1244,37 @@ class Trainer():
 
         # train generator
 
+        if self.alternating_training:
+            encoder_input = False
+
+
         self.StylEx.G_opt.zero_grad()
 
         for i in gradient_accumulate_contexts(self.gradient_accumulate_every, self.is_ddp, ddps=[S, G, D_aug]):
             image_batch = next(self.loader).cuda(self.rank)
             image_batch.requires_grad_()
 
-            # get_latents_fn = mixed_list if random() < self.mixed_prob else noise_list
-            encoder_output = self.StylEx.encoder(image_batch)[0]
-            real_classified_logits = self.classifier.classify_images(image_batch)
 
-            style = [(torch.cat((encoder_output, real_classified_logits), dim=1), self.StylEx.G.num_layers)]
-            noise = image_noise(batch_size, image_size, device=self.rank)
+            if self.alternating_training and encoder_input:
+                encoder_output = self.StylEx.encoder(image_batch)[0]
+                real_classified_logits = self.classifier.classify_images(image_batch)
 
-            w_styles = styles_def_to_tensor(style)
+                style = [(torch.cat((encoder_output, real_classified_logits), dim=1), self.StylEx.G.num_layers)]
+                noise = image_noise(batch_size, image_size, device=self.rank)
+
+                w_styles = styles_def_to_tensor(style)
+
+                encoder_input = False
+            else:
+                style = get_latents_fn(batch_size, num_layers, latent_dim, device=self.rank)
+                noise = image_noise(batch_size, image_size, device=self.rank)
+
+                w_space = latent_to_w(S, style)
+                w_styles = styles_def_to_tensor(w_space)
+
+                if self.alternating_training:
+                    encoder_input = True
+
 
             generated_images = G(w_styles, noise)
             gen_image_classified_logits = self.classifier.classify_images(generated_images)
@@ -1265,8 +1297,10 @@ class Trainer():
                     fake_output_loss, _ = fake_output_loss.topk(k=k, largest=False)
 
             # Our losses
-            rec_loss = 4 * reconstruction_loss(image_batch, generated_images, self.StylEx.encoder(generated_images)[0], encoder_output) /self.gradient_accumulate_every
-            kl_loss = classifier_kl_loss(real_classified_logits, gen_image_classified_logits)  / self.gradient_accumulate_every
+            if self.alternating_training and encoder_input:
+                # multiply losses by 2 since they are only calculated every other iteration
+                rec_loss = 2 * reconstruction_loss(image_batch, generated_images, self.StylEx.encoder(generated_images)[0], encoder_output) /self.gradient_accumulate_every
+                kl_loss = 2 * classifier_kl_loss(real_classified_logits, gen_image_classified_logits)  / self.gradient_accumulate_every
 
             # Original loss
             loss = G_loss_fn(fake_output_loss, real_output)
@@ -1282,22 +1316,29 @@ class Trainer():
                         gen_loss = gen_loss + pl_loss
 
             gen_loss = gen_loss / self.gradient_accumulate_every
-            # rec_loss = rec_loss / self.gradient_accumulate_every  #TODO: Gradient accumulation for reconstruction loss
             gen_loss.register_hook(raise_if_nan)
 
-            backwards(gen_loss, self.StylEx.G_opt, loss_id=2, retain_graph=True)
-            backwards(rec_loss, self.StylEx.G_opt, loss_id=3, retain_graph=True)
-            backwards(kl_loss, self.StylEx.G_opt, loss_id=4)
 
-            total_gen_loss += loss.detach().item() / self.gradient_accumulate_every
-            total_rec_loss += rec_loss.detach().item() / self.gradient_accumulate_every
-            total_kl_loss += kl_loss.detach().item() / self.gradient_accumulate_every
+            if self.alternating_training and encoder_input:
+                
+                backwards(gen_loss, self.StylEx.G_opt, loss_id=2, retain_graph=True)
+                backwards(rec_loss, self.StylEx.G_opt, loss_id=3, retain_graph=True)
+                backwards(kl_loss, self.StylEx.G_opt, loss_id=4)
 
+                total_gen_loss += loss.detach().item() / self.gradient_accumulate_every
+                total_rec_loss += rec_loss.detach().item() 
+                total_kl_loss += kl_loss.detach().item() 
+   
+                self.g_loss = float(total_gen_loss)
+                self.total_rec_loss = float(total_rec_loss)
+                self.total_kl_loss = float(total_kl_loss)
+            else:
+                backwards(gen_loss, self.StylEx.G_opt, loss_id=2)
 
-        self.g_loss = float(total_gen_loss)
-        self.total_rec_loss = float(total_rec_loss)
-        self.total_kl_loss = float(total_kl_loss)
+                total_gen_loss += loss.detach().item() / self.gradient_accumulate_every
 
+                self.g_loss = float(total_gen_loss)
+        
         # If writer exists, write losses
         if exists(self.tb_writer):
             self.tb_writer.add_scalar('loss/G', self.g_loss, self.steps)
