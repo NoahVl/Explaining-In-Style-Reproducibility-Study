@@ -398,6 +398,15 @@ def reconstruction_loss(encoder_batch: torch.Tensor, generated_images: torch.Ten
 
 def classifier_kl_loss(real_classifier_logits, fake_classifier_logits):
     # Convert logits to log_softmax and then KL loss
+
+    # Get probabilities through softmax
+
+    real_probabilities = torch.softmax(real_classifier_logits, dim=1)
+    fake_probabilities = torch.softmax(fake_classifier_logits, dim=1)
+
+       
+
+
     real_classifier_probabilities = F.log_softmax(real_classifier_logits, dim=1)
     fake_classifier_probabilities = F.log_softmax(fake_classifier_logits, dim=1)
 
@@ -1180,7 +1189,7 @@ class Trainer():
             discriminator_batch = next(self.loader).cuda(self.rank)
             discriminator_batch.requires_grad_()
 
-            if self.alternating_training and encoder_input:
+            if not self.alternating_training or encoder_input:
                 encoder_batch = next(self.loader).cuda(self.rank)
                 encoder_batch.requires_grad_()
 
@@ -1204,6 +1213,8 @@ class Trainer():
 
                 if self.alternating_training:
                     encoder_input=True
+
+        
             generated_images = G(w_styles, noise)
             fake_output, fake_q_loss = D_aug(generated_images.clone().detach(), detach=True, **aug_kwargs)
 
@@ -1255,7 +1266,7 @@ class Trainer():
             image_batch.requires_grad_()
 
 
-            if self.alternating_training and encoder_input:
+            if not self.alternating_training or encoder_input:
                 encoder_output = self.StylEx.encoder(image_batch)[0]
                 real_classified_logits = self.classifier.classify_images(image_batch)
 
@@ -1263,8 +1274,6 @@ class Trainer():
                 noise = image_noise(batch_size, image_size, device=self.rank)
 
                 w_styles = styles_def_to_tensor(style)
-
-                encoder_input = False
             else:
                 style = get_latents_fn(batch_size, num_layers, latent_dim, device=self.rank)
                 noise = image_noise(batch_size, image_size, device=self.rank)
@@ -1272,8 +1281,6 @@ class Trainer():
                 w_space = latent_to_w(S, style)
                 w_styles = styles_def_to_tensor(w_space)
 
-                if self.alternating_training:
-                    encoder_input = True
 
 
             generated_images = G(w_styles, noise)
@@ -1297,7 +1304,7 @@ class Trainer():
                     fake_output_loss, _ = fake_output_loss.topk(k=k, largest=False)
 
             # Our losses
-            if self.alternating_training and encoder_input:
+            if not self.alternating_training or encoder_input:
                 # multiply losses by 2 since they are only calculated every other iteration
                 rec_loss = 2 * reconstruction_loss(image_batch, generated_images, self.StylEx.encoder(generated_images)[0], encoder_output) /self.gradient_accumulate_every
                 kl_loss = 2 * classifier_kl_loss(real_classified_logits, gen_image_classified_logits)  / self.gradient_accumulate_every
@@ -1319,7 +1326,7 @@ class Trainer():
             gen_loss.register_hook(raise_if_nan)
 
 
-            if self.alternating_training and encoder_input:
+            if not self.alternating_training or encoder_input:
                 
                 backwards(gen_loss, self.StylEx.G_opt, loss_id=2, retain_graph=True)
                 backwards(rec_loss, self.StylEx.G_opt, loss_id=3, retain_graph=True)
@@ -1338,6 +1345,8 @@ class Trainer():
                 total_gen_loss += loss.detach().item() / self.gradient_accumulate_every
 
                 self.g_loss = float(total_gen_loss)
+
+            encoder_input = not encoder_input
         
         # If writer exists, write losses
         if exists(self.tb_writer):
