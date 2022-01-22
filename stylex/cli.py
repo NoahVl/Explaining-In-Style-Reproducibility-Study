@@ -33,7 +33,7 @@ def set_seed(seed):
     random.seed(seed)
 
 
-def run_training(rank, world_size, model_args, data, load_from, new, num_train_steps, name, seed):
+def run_training(rank, world_size, model_args, data, load_from, new, num_train_steps, name, seed, dataset_name='None'):
     is_main = rank == 0
     is_ddp = world_size > 1
 
@@ -58,7 +58,7 @@ def run_training(rank, world_size, model_args, data, load_from, new, num_train_s
     else:
         model.clear()
 
-    model.set_data_src(data)
+    model.set_data_src(data, dataset_name=dataset_name)
 
     progress_bar = tqdm(initial=model.steps, total=num_train_steps, mininterval=10., desc=f'{name}<{data}>')
     while model.steps < num_train_steps:
@@ -78,7 +78,7 @@ def train_from_folder(
         data='./mnist_images',  # Used to be data TODO: change back
         results_dir='./results',
         models_dir='./models',
-        name='mnist_4_proper_kl',  # Used to be 'default' (FFHQ) on my pc TODO: change back
+        name='StylEx',  # Used to be 'default' (FFHQ) on my pc TODO: change back
         new=False,
         load_from=-1,
         image_size=32,
@@ -86,7 +86,7 @@ def train_from_folder(
         fmap_max=512,   # 512
         transparent=False,
         batch_size=5,
-        gradient_accumulate_every=6,
+        gradient_accumulate_every=2,
         num_train_steps=150000,
         learning_rate=2e-4,
         lr_mlp=0.1,
@@ -123,11 +123,43 @@ def train_from_folder(
         clear_fid_cache=False,
         seed=42,
         log=False,
-        classifier_model_name="mnist.pth",  # TODO: Used to be FFHQ-Gender.pth
-        classifier_classes=2,  # TODO: Is 2 for faces gender.
+
+        # A global scale to the custom losses
+        # TODO: Check if changing encoder learning rate is more appropriate
+        #       than rescaling the reconstruction loss
+        kl_scaling=1,
+        rec_scaling=10,
+
+        # Path to the classifier
+        classifier_path="mnist.pth",
+
+        # This shouldn't ever be changed since we're working with
+        # binary classificiation.
+        num_classes=2,  # TODO: Is 2 for faces gender.
+
+        # If unspecified, use the Discriminator as an encoder.
+        # This is the way to go if we want to be close to the original paper.
+        # Check out debug_endocers.py for the names of classes if you still want
+        # to use a different encoder.
         encoder_class=None,
-        sample_from_encoder=True,  # TODO: Default is False
+
+        # This is for making the image results be results of the
+        # image -> encoder -> generator pipeline
+        # Set False if training a standard GAN or if you want to see
+        # examples from a noise vector
+        sample_from_encoder=True,  
+
+        # Alternatively trains the model with the StylEx loss
+        # and the regular StyleGAN loss. If False just trains
+        # using the encoder
         alternating_training=True,
+
+        # For now, I've made it so dataset_name='MNIST' automatically 
+        # loads and rebalances a 1 vs all MNIST dataset.
+        # TODO: Make custom dataloaders work in a distributed setting (low priority)
+        dataset_name=None,
+
+
         tensorboard_dir="tb_logs_stylex",  # TODO: None for not logging
 ):
 
@@ -169,9 +201,12 @@ def train_from_folder(
         clear_fid_cache=clear_fid_cache,
         mixed_prob=mixed_prob,
         log=log,
-        classifier_model_name=classifier_model_name,
-        classifier_classes=classifier_classes,
+        kl_scaling=kl_scaling,
+        rec_scaling=rec_scaling,
+        classifier_path=classifier_path,
+        num_classes=num_classes,
         encoder_class=encoder_class,
+        dataset_name=dataset_name,
         sample_from_encoder=sample_from_encoder,
         alternating_training=alternating_training,
         tensorboard_dir=tensorboard_dir,
@@ -200,7 +235,7 @@ def train_from_folder(
     world_size = torch.cuda.device_count()
 
     if world_size == 1 or not multi_gpus:
-        run_training(0, 1, model_args, data, load_from, new, num_train_steps, name, seed)
+        run_training(0, 1, model_args, data, load_from, new, num_train_steps, name, seed, dataset_name='MNIST')
         return
 
     mp.spawn(run_training,

@@ -210,6 +210,26 @@ attn_and_ff = lambda chan: nn.Sequential(*[
 
 # helpers
 
+
+def make_weights_for_balanced_classes(dataset, nclasses):                        
+    count = [0] * nclasses                                 
+
+    print(count)                     
+    for item in dataset:     
+
+        if len(item) == 1:
+            print(item)        
+        count[item[1]] += 1                                                     
+    weight_per_class = [0.] * nclasses                                      
+    N = float(sum(count))                                                   
+    for i in range(nclasses):                                                   
+        weight_per_class[i] = N/float(count[i])                                 
+    weight = [0] * len(dataset)                                              
+    for idx, val in enumerate(dataset):                                          
+        weight[idx] = weight_per_class[val[1]]                                  
+    return weight    
+
+
 def exists(val):
     return val is not None
 
@@ -401,11 +421,13 @@ def classifier_kl_loss(real_classifier_logits, fake_classifier_logits):
 
     # Get probabilities through softmax
 
-    real_probabilities = torch.softmax(real_classifier_logits, dim=1)
-    fake_probabilities = torch.softmax(fake_classifier_logits, dim=1)
+    # real_probabilities = torch.softmax(real_classifier_logits, dim=1)
+    # fake_probabilities = torch.softmax(fake_classifier_logits, dim=1)
 
-       
-
+    # if real_probabilities[0, 0] > real_probabilities[0, 1]:
+    #     print('!!!!!!!!!')
+    # else:
+    #     print('?????????')
 
     real_classifier_probabilities = F.log_softmax(real_classifier_logits, dim=1)
     fake_classifier_probabilities = F.log_softmax(fake_classifier_logits, dim=1)
@@ -457,6 +479,41 @@ def resize_to_minimum_size(min_size, image):
     if max(*image.size) < min_size:
         return torchvision.transforms.functional.resize(image, min_size)
     return image
+
+
+# Right now, opting for a 'named' dataset will replace the usual dataloader
+# used in training StylEx. It doesn't inherently support distributed
+# training, but we aren't doing that yet and MNIST can be trained fairly
+# easily on one GPU so it's not too much of a problem
+
+# pass --dataset_name MNIST to cli.py to automatically sample from MNIST
+# It will oversample the 'true' digit correctly
+
+class MNIST_1vA(torch.utils.data.Dataset):
+    def __init__(self, folder='./', digit=8):
+        self.image_size = 32
+
+        self.transform = transforms.Compose([
+                        transforms.Resize(32),
+                        transforms.ToTensor(),
+                        transforms.Lambda(lambda x: x.repeat(3, 1, 1) )
+                    ])
+
+
+        self.dataset = torchvision.datasets.MNIST(folder, train=True, download=True, transform=self.transform)
+        self.dataset.targets = self.dataset.targets == digit
+
+    def __getlen__(self):
+        return len(self.dataset)
+
+    def __getitem__(self, index):
+        image, target = self.dataset[index]
+
+        return image
+
+    def __len__(self):
+        return len(self.dataset)
+
 
 
 class Dataset(data.Dataset):
@@ -687,6 +744,7 @@ class Generator(nn.Module):
         filters = [init_channels, *filters]
 
         in_out_pairs = zip(filters[:-1], filters[1:])
+
         self.no_const = no_const
 
         if no_const:
@@ -842,10 +900,6 @@ class StylEx(nn.Module):
 
         self.D_cl = None
 
-        # Create encoder
-        # TODO: Make it 512 again once we figure out where they 512 + 2 to 512.
-        # self.encoder = DebugEncoder(image_size=image_size, latent_size=512 - classifier_labels).cuda(rank)
-
 
         # Is turned off by default
         if cl_reg:
@@ -951,18 +1005,25 @@ class Trainer():
             rank=0,
             world_size=1,
             log=False,
-            classifier_model_name="mnist.pth", #TODO: Used to be FFHQ-Gender.pth,
-            classifier_classes=10,  # TODO: Used to be 2 for faces gender.
+            kl_scaling=1,
+            rec_scaling=10,
+            classifier_path="mnist.pth", #TODO: Used to be FFHQ-Gender.pth,
+            num_classes=2,  # TODO: Used to be 2 for faces gender.
             encoder_class=None,
             alternating_training=True,
             sample_from_encoder=False,
+            dataset_name=None,
             tensorboard_dir=None,
+            
             *args,
             **kwargs
     ):
         self.model_params = [args, kwargs]
         self.StylEx = None
 
+        self.kl_scaling = kl_scaling
+        self.rec_scaling = rec_scaling
+        
         self.alternating_training=alternating_training
 
         self.name = name
@@ -1051,8 +1112,8 @@ class Trainer():
         self.logger = aim.Session(experiment=name) if log else None
 
         # Load classifier
-        self.classifier_classes = classifier_classes
-        self.classifier = MobileNet(classifier_model_name, cuda_rank=rank, output_size=self.classifier_classes)  # Automatically put into eval mode
+        self.num_classes = num_classes
+        self.classifier = MobileNet(classifier_path, cuda_rank=rank, output_size=self.num_classes)  # Automatically put into eval mode
 
         # Load tensorboard, create writer
         self.tb_writer = None
@@ -1078,7 +1139,7 @@ class Trainer():
                              network_capacity=self.network_capacity, fmap_max=self.fmap_max,
                              transparent=self.transparent, fq_layers=self.fq_layers, fq_dict_size=self.fq_dict_size,
                              attn_layers=self.attn_layers, fp16=self.fp16, cl_reg=self.cl_reg, no_const=self.no_const,
-                             rank=self.rank, classifier_labels=self.classifier_classes, *args, **kwargs)
+                             rank=self.rank, classifier_labels=self.num_classes, *args, **kwargs)
 
         if self.is_ddp:
             ddp_kwargs = {'device_ids': [self.rank]}
@@ -1112,14 +1173,35 @@ class Trainer():
                 'transparent': self.transparent, 'fq_layers': self.fq_layers, 'fq_dict_size': self.fq_dict_size,
                 'attn_layers': self.attn_layers, 'no_const': self.no_const}
 
-    def set_data_src(self, folder):
-        self.dataset = Dataset(folder, self.image_size, transparent=self.transparent, aug_prob=self.dataset_aug_prob)
-        num_workers = num_workers = default(self.num_workers, NUM_CORES if not self.is_ddp else 0)
-        sampler = DistributedSampler(self.dataset, rank=self.rank, num_replicas=self.world_size,
-                                     shuffle=True) if self.is_ddp else None
-        dataloader = data.DataLoader(self.dataset, num_workers=num_workers,
-                                     batch_size=math.ceil(self.batch_size / self.world_size), sampler=sampler,
-                                     shuffle=not self.is_ddp, drop_last=True, pin_memory=True)
+
+    
+
+    def set_data_src(self, folder='./', dataset_name=None):
+
+        if dataset_name is None:
+            self.dataset = Dataset(folder, self.image_size, transparent=self.transparent, aug_prob=self.dataset_aug_prob)
+            num_workers = num_workers = default(self.num_workers, NUM_CORES if not self.is_ddp else 0)
+
+            sampler = DistributedSampler(self.dataset, rank=self.rank, num_replicas=self.world_size,
+                                            shuffle=True) if self.is_ddp else None
+
+        
+            dataloader = data.DataLoader(self.dataset, num_workers=num_workers,
+                                        batch_size=math.ceil(self.batch_size / self.world_size), sampler=sampler,
+                                        shuffle=not self.is_ddp, drop_last=True, pin_memory=True)
+
+
+        if dataset_name == 'MNIST':
+
+            self.dataset = MNIST_1vA(digit=8)
+
+            weights = make_weights_for_balanced_classes(self.dataset.dataset, self.num_classes)
+            sampler = torch.utils.data.WeightedRandomSampler(weights, len(weights))
+
+            dataloader = data.DataLoader(self.dataset, batch_size=self.batch_size, sampler=sampler)
+
+
+                            
         self.loader = cycle(dataloader)
 
         # auto set augmentation prob for user if dataset is detected to be low
@@ -1184,6 +1266,7 @@ class Trainer():
 
         if self.alternating_training:
             encoder_input = False
+
 
         for i in gradient_accumulate_contexts(self.gradient_accumulate_every, self.is_ddp, ddps=[D_aug, S, G]):
             discriminator_batch = next(self.loader).cuda(self.rank)
@@ -1305,9 +1388,13 @@ class Trainer():
 
             # Our losses
             if not self.alternating_training or encoder_input:
-                # multiply losses by 2 since they are only calculated every other iteration
-                rec_loss = 2 * reconstruction_loss(image_batch, generated_images, self.StylEx.encoder(generated_images)[0], encoder_output) /self.gradient_accumulate_every
-                kl_loss = 2 * classifier_kl_loss(real_classified_logits, gen_image_classified_logits)  / self.gradient_accumulate_every
+                rec_loss = self.rec_scaling * reconstruction_loss(image_batch, generated_images, self.StylEx.encoder(generated_images)[0], encoder_output) / self.gradient_accumulate_every
+                kl_loss =  self.kl_scaling * classifier_kl_loss(real_classified_logits, gen_image_classified_logits)  / self.gradient_accumulate_every
+
+            # multiply losses by 2 since they are only calculated every other iteration if using alternating training
+            if self.alternating_training:
+                rec_loss = 2 * rec_loss
+                kl_loss = 2 * kl_loss
 
             # Original loss
             loss = G_loss_fn(fake_output_loss, real_output)

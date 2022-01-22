@@ -21,20 +21,22 @@ def load_classifier(model_name: str, cuda_rank: int, output_size: int = 2) -> to
     model.classifier[1] = nn.Linear(1280, output_size).to(device)
 
     # Load the weights from the checkpoint.
-    model.load_state_dict(torch.load(os.path.join("saved_classifiers", model_name), map_location=device))
+    model.load_state_dict(torch.load(os.path.join("trained_classifiers", model_name), map_location=device))
 
     return model
 
 
 class MobileNet():
-    def __init__(self, model_name: str, cuda_rank: int, output_size: int = 2):
+    def __init__(self, model_name: str, cuda_rank: int, output_size: int = 2, image_size=32, normalize=True):
         self.model = load_classifier(model_name, cuda_rank, output_size)
 
         self.mobilenet_dim = 224
 
         # Image transformation
         self.image_transform = transforms.Compose([
-            transforms.Resize(self.mobilenet_dim),
+            # I am commenting out resize, since it seems to be automatically done
+            # And we need to interpolate to image_size before passing to the classifier
+            # transforms.Resize(self.mobilenet_dim), 
             transforms.ToTensor()
         ])
 
@@ -54,9 +56,15 @@ class MobileNet():
         Classifies a batch of images using the given model.
         """
         if isinstance(images, torch.Tensor):
-            preprocessed_images = F.interpolate(images, size=self.mobilenet_dim)
+            preprocessed_images = F.interpolate(images, size=image_size)
         else:
             preprocessed_images = self.image_transform(images)
+            preprocessed_images = F.interpolate(images, size=image_size)
+
+        # I trained on MNIST without normalizing, but it still worked,
+        # so I made normalization optional
+        if normalize:
+            preprocessed_images = self.tensor_transform(preprocessed_images)
 
         # Classify the images.
-        return self.model(self.tensor_transform(preprocessed_images))
+        return self.model(images)
