@@ -31,6 +31,7 @@ class MobileNet():
         self.model = load_classifier(model_name, cuda_rank, output_size)
 
         self.mobilenet_dim = 224
+        self.image_size = image_size
 
         # Image transformation
         self.image_transform = transforms.Compose([
@@ -44,6 +45,8 @@ class MobileNet():
             transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225])
         ])
 
+        self.normalize=normalize
+
         # Freeze all layers
         for param in self.model.parameters():
             param.requires_grad = False
@@ -56,14 +59,14 @@ class MobileNet():
         Classifies a batch of images using the given model.
         """
         if isinstance(images, torch.Tensor):
-            preprocessed_images = F.interpolate(images, size=image_size)
+            preprocessed_images = F.interpolate(images, size=self.image_size)
         else:
             preprocessed_images = self.image_transform(images)
-            preprocessed_images = F.interpolate(images, size=image_size)
+            preprocessed_images = F.interpolate(images, size=self.image_size)
 
         # I trained on MNIST without normalizing, but it still worked,
         # so I made normalization optional
-        if normalize:
+        if self.normalize:
             preprocessed_images = self.tensor_transform(preprocessed_images)
 
         # Classify the images.

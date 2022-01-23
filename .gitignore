@@ -10,6 +10,16 @@ __pycache__/
 *.pth
 *.pt
 
+# datasets
+
+plant-village/*
+stylex/MNIST/*
+
+
+# Tadija's scratch notebooks
+
+classifier_checking.ipynb
+
 # Tensorboard logs
 
 stylex/tb_logs_stylex/*

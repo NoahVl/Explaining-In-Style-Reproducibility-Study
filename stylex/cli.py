@@ -33,7 +33,7 @@ def set_seed(seed):
     random.seed(seed)
 
 
-def run_training(rank, world_size, model_args, data, load_from, new, num_train_steps, name, seed, dataset_name='None'):
+def run_training(rank, world_size, model_args, data, load_from, new, num_train_steps, name, seed, dataset_name=None):
     is_main = rank == 0
     is_ddp = world_size > 1
 
@@ -128,7 +128,7 @@ def train_from_folder(
         # TODO: Check if changing encoder learning rate is more appropriate
         #       than rescaling the reconstruction loss
         kl_scaling=1,
-        rec_scaling=10,
+        rec_scaling=5,
 
         # Path to the classifier
         classifier_path="mnist.pth",
@@ -235,7 +235,7 @@ def train_from_folder(
     world_size = torch.cuda.device_count()
 
     if world_size == 1 or not multi_gpus:
-        run_training(0, 1, model_args, data, load_from, new, num_train_steps, name, seed, dataset_name='MNIST')
+        run_training(0, 1, model_args, data, load_from, new, num_train_steps, name, seed, dataset_name=dataset_name)
         return
 
     mp.spawn(run_training,

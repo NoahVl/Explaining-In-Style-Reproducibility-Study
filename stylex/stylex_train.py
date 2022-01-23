@@ -682,7 +682,9 @@ class GeneratorBlock(nn.Module):
         self.activation = leaky_relu()
         self.to_rgb = RGBBlock(latent_dim, filters, upsample_rgb, rgba)
 
-    def forward(self, x, prev_rgb, istyle, inoise):
+    
+
+    def forward(self, x, prev_rgb, istyle, inoise, perturb=False, coords=[], D=[]):
         if exists(self.upsample):
             x = self.upsample(x)
 
@@ -691,10 +693,16 @@ class GeneratorBlock(nn.Module):
         noise2 = self.to_noise2(inoise).permute((0, 3, 2, 1))
 
         style1 = self.to_style1(istyle)
+
+        # Perturb here
+
         x = self.conv1(x, style1)
         x = self.activation(x + noise1)
 
         style2 = self.to_style2(istyle)
+
+        # Perturb here
+
         x = self.conv2(x, style2)
         x = self.activation(x + noise2)
 
@@ -1113,7 +1121,7 @@ class Trainer():
 
         # Load classifier
         self.num_classes = num_classes
-        self.classifier = MobileNet(classifier_path, cuda_rank=rank, output_size=self.num_classes)  # Automatically put into eval mode
+        self.classifier = MobileNet(classifier_path, cuda_rank=rank, output_size=self.num_classes, image_size=64)  # Automatically put into eval mode
 
         # Load tensorboard, create writer
         self.tb_writer = None
@@ -1177,7 +1185,7 @@ class Trainer():
     
 
     def set_data_src(self, folder='./', dataset_name=None):
-
+        print(dataset_name)
         if dataset_name is None:
             self.dataset = Dataset(folder, self.image_size, transparent=self.transparent, aug_prob=self.dataset_aug_prob)
             num_workers = num_workers = default(self.num_workers, NUM_CORES if not self.is_ddp else 0)
@@ -1346,6 +1354,7 @@ class Trainer():
 
         for i in gradient_accumulate_contexts(self.gradient_accumulate_every, self.is_ddp, ddps=[S, G, D_aug]):
             image_batch = next(self.loader).cuda(self.rank)
+
             image_batch.requires_grad_()
 
 
@@ -1388,13 +1397,11 @@ class Trainer():
 
             # Our losses
             if not self.alternating_training or encoder_input:
-                rec_loss = self.rec_scaling * reconstruction_loss(image_batch, generated_images, self.StylEx.encoder(generated_images)[0], encoder_output) / self.gradient_accumulate_every
-                kl_loss =  self.kl_scaling * classifier_kl_loss(real_classified_logits, gen_image_classified_logits)  / self.gradient_accumulate_every
+                # multiply losses by 2 since they are only calculated every other iteration if using alternating training
+                rec_loss = 2 * self.rec_scaling * reconstruction_loss(image_batch, generated_images, self.StylEx.encoder(generated_images)[0], encoder_output) / self.gradient_accumulate_every
+                kl_loss =  2* self.kl_scaling * classifier_kl_loss(real_classified_logits, gen_image_classified_logits)  / self.gradient_accumulate_every
 
-            # multiply losses by 2 since they are only calculated every other iteration if using alternating training
-            if self.alternating_training:
-                rec_loss = 2 * rec_loss
-                kl_loss = 2 * kl_loss
+
 
             # Original loss
             loss = G_loss_fn(fake_output_loss, real_output)
