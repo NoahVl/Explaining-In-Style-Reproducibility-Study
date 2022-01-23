@@ -13,6 +13,7 @@ import torch.distributed as dist
 
 import numpy as np
 
+from attrfind import run_attrfind
 
 
 def cast_list(el):
@@ -74,6 +75,24 @@ def run_training(rank, world_size, model_args, data, load_from, new, num_train_s
         dist.destroy_process_group()
 
 
+"""
+image_size, latent_dim=514, fmap_max=512, network_capacity=16, transparent=False,
+                 fp16=False, cl_reg=False, steps=1, lr=1e-4, ttur_mult=2, fq_layers=[], fq_dict_size=256,
+                 attn_layers=[], no_const=False, lr_mlp=0.1, rank=0, classifier_labels=2, encoder_class=None
+"""
+
+
+def attrfind(
+        data='./',
+        stylex_path='',
+        classifier_name='',
+        image_size=32,
+        n_images=8,
+        batch_size=4,
+):
+    run_attrfind(data, stylex_path, classifier_name, image_size, n_images, batch_size)
+
+
 def train_from_folder(
         data='./mnist_images',  # Used to be data TODO: change back
         results_dir='./results',
@@ -83,7 +102,7 @@ def train_from_folder(
         load_from=-1,
         image_size=32,
         network_capacity=16,
-        fmap_max=512,   # 512
+        fmap_max=512,  # 512
         transparent=False,
         batch_size=5,
         gradient_accumulate_every=2,
@@ -131,10 +150,10 @@ def train_from_folder(
         rec_scaling=5,
 
         # Path to the classifier
-        classifier_path="mnist.pth",
+        classifier_path="mnist32.pth",
 
         # This shouldn't ever be changed since we're working with
-        # binary classificiation.
+        # binary classification.
         num_classes=2,  # TODO: Is 2 for faces gender.
 
         # If unspecified, use the Discriminator as an encoder.
@@ -147,7 +166,7 @@ def train_from_folder(
         # image -> encoder -> generator pipeline
         # Set False if training a standard GAN or if you want to see
         # examples from a noise vector
-        sample_from_encoder=True,  
+        sample_from_encoder=True,
 
         # Alternatively trains the model with the StylEx loss
         # and the regular StyleGAN loss. If False just trains
@@ -159,10 +178,8 @@ def train_from_folder(
         # TODO: Make custom dataloaders work in a distributed setting (low priority)
         dataset_name=None,
 
-
         tensorboard_dir="tb_logs_stylex",  # TODO: None for not logging
 ):
-
     model_args = dict(
         name=name,
         results_dir=results_dir,
@@ -212,8 +229,6 @@ def train_from_folder(
         tensorboard_dir=tensorboard_dir,
     )
 
-
-
     if generate:
         model = Trainer(**model_args)
         model.load(load_from)
@@ -245,7 +260,10 @@ def train_from_folder(
 
 
 def main():
-    fire.Fire(train_from_folder)
+    # python cli.py train_from_folder --asdasd
+    # python cli.py attrfind --asdasdasd
+
+    fire.Fire()
 
 
 if __name__ == '__main__':
