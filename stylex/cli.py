@@ -87,8 +87,8 @@ def attrfind(
         stylex_path='',
         classifier_name='',
         image_size=32,
-        n_images=8,
-        batch_size=4,
+        n_images=4,
+        batch_size=2,
 ):
     run_attrfind(data, stylex_path, classifier_name, image_size, n_images, batch_size)
 

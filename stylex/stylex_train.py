@@ -669,6 +669,12 @@ class Conv2DMod(nn.Module):
 class GeneratorBlock(nn.Module):
     def __init__(self, latent_dim, input_channels, filters, upsample=True, upsample_rgb=True, rgba=False):
         super().__init__()
+
+        self.input_channels = input_channels
+        self.filters = filters
+
+        self.num_style_coords = self.input_channels + self.filters
+
         self.upsample = nn.Upsample(scale_factor=2, mode='bilinear', align_corners=False) if upsample else None
 
         self.to_style1 = nn.Linear(latent_dim, input_channels)
