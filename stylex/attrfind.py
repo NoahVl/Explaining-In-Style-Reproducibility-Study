@@ -21,6 +21,7 @@ import ast
 
 NUM_CORES = multiprocessing.cpu_count()
 
+
 def plot_image(tensor) -> None:
     """
     Plots an image from a tensor.
@@ -98,9 +99,8 @@ def get_min_max_style_vectors(stylex, classifier, loader, batch_size, num_images
         encoder_output = stylex.encoder(encoder_batch)
         real_classified_logits = classifier.classify_images(encoder_batch)
 
-        #noise = image_noise(batch_size, image_size, device=cuda_rank)
+        # noise = image_noise(batch_size, image_size, device=cuda_rank)
         zero_noise = torch.zeros(batch_size, image_size, image_size, 1).cuda(cuda_rank)
-
 
         latent_w = [(torch.cat((encoder_output, real_classified_logits), dim=1),
                      stylex.G.num_layers)]  # Has to be bracketed because expects a noise mix
@@ -128,7 +128,7 @@ def filter_unstable_images(style_change_effect: torch.Tensor,
                            num_indices_threshold: int = 150) -> torch.Tensor:
     """Filters out images which are affected by too many S values."""
     unstable_images = (
-                torch.sum(torch.abs(style_change_effect) > effect_threshold, dim=(1, 2, 3)) > num_indices_threshold)
+            torch.sum(torch.abs(style_change_effect) > effect_threshold, dim=(1, 2, 3)) > num_indices_threshold)
     style_change_effect[unstable_images] = 0
     return style_change_effect
 
@@ -176,7 +176,7 @@ def run_attrfind(
 
                     encoder_output = stylex.encoder(batch)
 
-                    #noise = image_noise(batch_size, image_size, device=cuda_rank)
+                    # noise = image_noise(batch_size, image_size, device=cuda_rank)
 
                     real_classified_logits = classifier.classify_images(batch)
 
@@ -193,6 +193,7 @@ def run_attrfind(
                     feature = {}
 
                     style_change_effect = torch.zeros(batch_size, style_vector_amount, 2, 2).cuda(cuda_rank)
+                    individual_shift_tensor = torch.zeros(batch_size, style_vector_amount, 2).cuda(cuda_rank)
 
                     for sindex in tqdm.tqdm(range(style_vector_amount)):
                         block_idx, weight_idx = sindex_to_block_idx_and_index(stylex.G, sindex)
@@ -217,7 +218,7 @@ def run_attrfind(
                         one_hot[:, weight_idx] = 1
 
                         s_shift_down = one_hot * (
-                                    (minimums[sindex] - style_coords[:, sindex]) * s_shift_size).unsqueeze(1)
+                                (minimums[sindex] - style_coords[:, sindex]) * s_shift_size).unsqueeze(1)
                         s_shift_up = one_hot * ((maximums[sindex] - style_coords[:, sindex]) * s_shift_size).unsqueeze(
                             1)
 
@@ -232,21 +233,28 @@ def run_attrfind(
                                 style_change_effect[image_index, sindex, direction_index] = shift_classification - \
                                                                                             base_prob_logits[
                                                                                                 image_index]
+                                if direction_index == 0:
+                                    shift_save = (minimums[sindex] - style_coords[:, sindex]) * s_shift_size
+                                else:
+                                    shift_save = (maximums[sindex] - style_coords[:, sindex]) * s_shift_size
+
+                                individual_shift_tensor[image_index, sindex, direction_index] = shift_save                                                                
                                 current_style_layer.bias -= individual_shift
 
                     if batch_num == 0:
-                        style_changes_to8 = style_change_effect[0,:,:,1] - style_change_effect[0,:,:,0]
+                        style_changes_to8 = style_change_effect[0, :, :, 1] - style_change_effect[0, :, :, 0]
 
-
-                        #style_changes_norm = torch.linalg.norm(style_changes_test, dim=2, keepdim=True)
+                        # style_changes_norm = torch.linalg.norm(style_changes_test, dim=2, keepdim=True)
 
                         # Destroy the direction dimension
                         style_changes_norm_flattened = style_changes_to8.flatten()
 
                         # Sort the style_changes by the norm
-                        style_changes_norm_sorted, style_changes_indices = torch.sort(style_changes_norm_flattened, descending=True)
-
+                        style_changes_norm_sorted, style_changes_indices = torch.sort(style_changes_norm_flattened,
+                                                                                      descending=True)
                         print(style_changes_norm_sorted[0], style_changes_indices[0])
+                        
+                        print("top shift tensor", "direction:", style_changes_indices[0] % 2, "tensor:", individual_shift_tensor[0, style_changes_indices[0] / 2, style_changes_indices[0] % 2])
 
                     feature['base_prob_logits'] = base_prob_logits.tolist()  # .flatten()
                     feature['wlatent'] = w_latent_tensor[:, 0].tolist()  # .flatten()
@@ -283,13 +291,14 @@ def run_attrfind(
         # Reshape the first two dimensions to the amount of images
         num_images = total_number_of_batches * batch_size
         style_change_effect = style_change_effect.view(num_images, style_vector_amount, 2, 2)
+
         wlatents = wlatents.view(num_images, stylex.G.latent_dim)
         base_probs = base_probs.view(num_images, 2)
 
         # Tadija's idea: Plot the 4 images with the highest change in classifications
 
         # style_change_effect[total_num_images, style_vector_amount, 2, 2)
-        #noise = image_noise(1, image_size, device=cuda_rank)
+        # noise = image_noise(1, image_size, device=cuda_rank)
         zero_noise = torch.zeros(1, image_size, image_size, 1).cuda(cuda_rank)
         wlatents = wlatents.unsqueeze(1).expand(4, stylex.G.num_layers, stylex.G.latent_dim)
 
@@ -305,22 +314,20 @@ def run_attrfind(
         style_changes_test = style_change_effect[0]
 
         # Calculate the difference between the 2 digits in the last layer
-        
+
         # [1184 2 2]
 
         # [1184 2 1]
 
-        style_changes_to8 = style_changes_test[:,:,1] - style_changes_test[:,:,0]
+        style_changes_to8 = style_changes_test[:, :, 1] - style_changes_test[:, :, 0]
 
-
-        #style_changes_norm = torch.linalg.norm(style_changes_test, dim=2, keepdim=True)
+        # style_changes_norm = torch.linalg.norm(style_changes_test, dim=2, keepdim=True)
 
         # Destroy the direction dimension
         style_changes_norm_flattened = style_changes_to8.flatten()
 
         # Sort the style_changes by the norm
         style_changes_norm_sorted, style_changes_indices = torch.sort(style_changes_norm_flattened, descending=True)
-
 
         # [style_coords, direction, num_class]
         # [style_coords, direction]
@@ -329,7 +336,9 @@ def run_attrfind(
         k = 1
         one_hot = None
 
-        top_k_changes, top_k_sindex, top_k_directions = style_changes_norm_sorted[:k], style_changes_indices[:k] / 2, style_changes_indices[:k] % 2
+        top_k_changes, top_k_sindex, top_k_directions = style_changes_norm_sorted[:k], style_changes_indices[
+                                                                                       :k] / 2, style_changes_indices[
+                                                                                                :k] % 2
 
         # Change the biases in the direction specified.
         for i in range(k):
@@ -348,24 +357,24 @@ def run_attrfind(
                 current_style_layer = block.to_style2
                 one_hot = torch.zeros((1, block.filters)).cuda(cuda_rank)
 
-            
             one_hot[:, weight_idx] = 1
 
             if top_k_directions[i] == 0:
                 individual_shift = one_hot * (
-                            (minimums[sindex] - style_coords[:, sindex]) * s_shift_size).unsqueeze(1)
+                        (minimums[sindex] - style_coords[:, sindex]) * s_shift_size).unsqueeze(1)
+                save_shift = (minimums[sindex] - style_coords[:, sindex]) * s_shift_size
             else:
                 individual_shift = one_hot * (
-                            (maximums[sindex] - style_coords[:, sindex]) * s_shift_size).unsqueeze(1)
+                        (maximums[sindex] - style_coords[:, sindex]) * s_shift_size).unsqueeze(1)
+                save_shift = (maximums[sindex] - style_coords[:, sindex]) * s_shift_size
 
-            
-            
             current_style_layer.bias += individual_shift[0]
-        
+            print("shift:", save_shift[0], "direction:", top_k_directions[i])
+
         # Generate the perturbed image
         perturbed_generated_images, style_coords = stylex.G(wlatent_test.unsqueeze(0),
-                                                                zero_noise,
-                                                                get_style_coords=True)            
+                                                            zero_noise,
+                                                            get_style_coords=True)
         shift_classification = classifier.classify_images(perturbed_generated_images)
         print("Base classification encoded image:", base_probs[0])
         print("New classification:", shift_classification)
@@ -375,13 +384,10 @@ def run_attrfind(
 
         # Plot the perturbed images
         plot_image(perturbed_generated_images[0])
-        
-
 
         # Change the biases back to their original direction
         for i in range(k):
             current_style_layer.bias -= individual_shift
-
 
         perturbed_image = stylex.G(wlatent_test, zero_noise)
 
