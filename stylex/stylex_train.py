@@ -924,8 +924,8 @@ class StylEx(nn.Module):
         set_requires_grad(self.GE, False)
 
         # init optimizers
-        generator_params = list(self.G.parameters()) + list(self.S.parameters()) + list(self.encoder.parameters())
-        self.G_opt = Adam(generator_params, lr=self.lr, betas=(0.5, 0.9))
+        generator_params = list(self.G.parameters()) + list(self.S.parameters()) 
+        self.G_opt = Adam([{'params' : generator_params}, {'params' :  list(self.encoder.parameters()), 'lr': 1e-5}], lr=self.lr, betas=(0.5, 0.9))
         self.D_opt = Adam(self.D.parameters(), lr=self.lr * ttur_mult, betas=(0.5, 0.9))
 
         # init weights
@@ -1274,6 +1274,8 @@ class Trainer():
 
         if self.alternating_training:
             encoder_input = False
+        else:
+            encoder_input = True
 
 
         for i in gradient_accumulate_contexts(self.gradient_accumulate_every, self.is_ddp, ddps=[D_aug, S, G]):
@@ -1281,6 +1283,10 @@ class Trainer():
             discriminator_batch.requires_grad_()
 
             if not self.alternating_training or encoder_input:
+
+                
+                self.StylEx.encoder.zero_grad()
+
                 encoder_batch = next(self.loader).cuda(self.rank)
                 encoder_batch.requires_grad_()
 
@@ -1292,8 +1298,6 @@ class Trainer():
 
 
                 w_styles = styles_def_to_tensor(style)
-
-                encoder_input = False
             else:
                 get_latents_fn = mixed_list if random() < self.mixed_prob else noise_list
                 style = get_latents_fn(batch_size, num_layers, latent_dim, device=self.rank)
@@ -1302,14 +1306,13 @@ class Trainer():
                 w_space = latent_to_w(S, style)
                 w_styles = styles_def_to_tensor(w_space)
 
-                if self.alternating_training:
-                    encoder_input=True
-
         
             generated_images = G(w_styles, noise)
             fake_output, fake_q_loss = D_aug(generated_images.clone().detach(), detach=True, **aug_kwargs)
 
             real_output, real_q_loss = D_aug(discriminator_batch, **aug_kwargs)
+
+
 
             real_output_loss = real_output
             fake_output_loss = fake_output
@@ -1320,6 +1323,7 @@ class Trainer():
 
             divergence = D_loss_fn(real_output_loss, fake_output_loss)
             disc_loss = divergence
+
 
             if self.has_fq:
                 quantize_loss = (fake_q_loss + real_q_loss).mean()
@@ -1334,6 +1338,29 @@ class Trainer():
                 disc_loss = disc_loss + gp
 
             disc_loss = disc_loss / self.gradient_accumulate_every
+
+            if self.alternating_training and encoder_input:
+
+                generated_images_w = self.StylEx.encoder(generated_images)[0]
+                rec_loss = self.rec_scaling * reconstruction_loss(encoder_batch, generated_images, generated_images_w, encoder_output) / self.gradient_accumulate_every
+                
+                
+                gen_image_classified_logits = self.classifier.classify_images(generated_images)
+
+                kl_loss = self.kl_scaling * classifier_kl_loss(real_classified_logits, gen_image_classified_logits)  / self.gradient_accumulate_every
+                #rec_loss = rec_loss / self.ttur_scaling
+
+                backwards(rec_loss, self.StylEx.G_opt, loss_id=3)
+                total_rec_loss += rec_loss.detach().item() #/ self.gradient_accumulate_every
+
+                backwards(kl_loss, self.StylEx.G_opt, loss_id=4)
+
+                total_kl_loss += kl_loss.detach().item() #/ self.gradient_accumulate_every
+
+                encoder_input = False
+            elif self.alternating_training:
+                encoder_input = True
+
             disc_loss.register_hook(raise_if_nan)
             backwards(disc_loss, self.StylEx.D_opt, loss_id=1)
 
@@ -1398,8 +1425,8 @@ class Trainer():
             # Our losses
             if not self.alternating_training or encoder_input:
                 # multiply losses by 2 since they are only calculated every other iteration if using alternating training
-                rec_loss = 2 * self.rec_scaling * reconstruction_loss(image_batch, generated_images, self.StylEx.encoder(generated_images)[0], encoder_output) / self.gradient_accumulate_every
-                kl_loss =  2* self.kl_scaling * classifier_kl_loss(real_classified_logits, gen_image_classified_logits)  / self.gradient_accumulate_every
+                rec_loss = self.rec_scaling * reconstruction_loss(image_batch, generated_images, self.StylEx.encoder(generated_images)[0], encoder_output) / self.gradient_accumulate_every
+                kl_loss =  self.kl_scaling * classifier_kl_loss(real_classified_logits, gen_image_classified_logits)  / self.gradient_accumulate_every
 
 
 
