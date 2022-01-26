@@ -813,6 +813,7 @@ class DiscriminatorE(nn.Module):
         num_init_filters = 3 if not transparent else 4
 
 
+
         blocks = []
         filters = [num_init_filters] + [(network_capacity * 4) * (2 ** i) for i in range(num_layers + 1)]
 
@@ -838,6 +839,7 @@ class DiscriminatorE(nn.Module):
             quantize_fn = PermuteToFrom(VectorQuantize(out_chan, fq_dict_size)) if num_layer in fq_layers else None
             quantize_blocks.append(quantize_fn)
 
+        self.encoder = encoder
         self.blocks = nn.ModuleList(blocks)
         self.attn_blocks = nn.ModuleList(attn_blocks)
         self.quantize_blocks = nn.ModuleList(quantize_blocks)
@@ -848,16 +850,17 @@ class DiscriminatorE(nn.Module):
         self.final_conv = nn.Conv2d(chan_last, chan_last, 3, padding=1)
         self.flatten = Flatten()
         self.encoder_dim = encoder_dim
+
     
-        if not encoder:
-            self.fc = nn.Linear(latent_dim, 1)
+        if not self.encoder:
+            self.fc = nn.Linear(latent_dim, 2)
         else:
             self.fc = nn.Linear(latent_dim,  self.encoder_dim)
 
-    def forward(self, x):
+    def forward(self, x, probabilities=torch.Tensor([0.0, 0.0])):
         b, *_ = x.shape
 
-        quantize_loss = torch.zeros(1).to(x)
+        #quantize_loss = torch.zeros(1).to(x)
 
         for (block, attn_block, q_block) in zip(self.blocks, self.attn_blocks, self.quantize_blocks):
             x = block(x)
@@ -865,16 +868,20 @@ class DiscriminatorE(nn.Module):
             if exists(attn_block):
                 x = attn_block(x)
 
-            if exists(q_block):
-                x, loss = q_block(x)
-                quantize_loss += loss
+            # if exists(q_block):
+            #     x, loss = q_block(x)
+            #     quantize_loss += loss
 
         x = self.final_conv(x)
         x = self.flatten(x)
 
-
         x = self.fc(x)
-        return x.squeeze(), quantize_loss
+
+        if self.encoder:
+            # Do a weighted sum of x[:, 0] and x[:, 1] with probabilities
+            x = x[:, 0] * probabilities[0] + x[:, 1] * probabilities[1]
+    
+        return x.squeeze() #, quantize_loss
 
 
 class StylEx(nn.Module):
