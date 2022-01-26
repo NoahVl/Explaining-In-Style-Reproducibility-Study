@@ -58,7 +58,10 @@ def run_training(rank, world_size, model_args, data, load_from, new, num_train_s
     else:
         model.clear()
 
+
     model.set_data_src(data, dataset_name=dataset_name)
+
+
 
     progress_bar = tqdm(initial=model.steps, total=num_train_steps, mininterval=10., desc=f'{name}<{data}>')
     while model.steps < num_train_steps:
@@ -143,6 +146,9 @@ def train_from_folder(
         # to use a different encoder.
         encoder_class=None,
 
+
+        kl_rec_during_disc=False,
+
         # This is for making the image results be results of the
         # image -> encoder -> generator pipeline
         # Set False if training a standard GAN or if you want to see
@@ -209,6 +215,7 @@ def train_from_folder(
         dataset_name=dataset_name,
         sample_from_encoder=sample_from_encoder,
         alternating_training=alternating_training,
+        kl_rec_during_disc=kl_rec_during_disc,   
         tensorboard_dir=tensorboard_dir,
     )
 

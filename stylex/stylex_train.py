@@ -1018,6 +1018,7 @@ class Trainer():
             classifier_path="mnist.pth", #TODO: Used to be FFHQ-Gender.pth,
             num_classes=2,  # TODO: Used to be 2 for faces gender.
             encoder_class=None,
+            kl_rec_during_disc=False,
             alternating_training=True,
             sample_from_encoder=False,
             dataset_name=None,
@@ -1031,6 +1032,8 @@ class Trainer():
 
         self.kl_scaling = kl_scaling
         self.rec_scaling = rec_scaling
+
+        self.kl_rec_during_disc = kl_rec_during_disc
         
         self.alternating_training=alternating_training
 
@@ -1227,6 +1230,7 @@ class Trainer():
     def train(self):
         assert exists(self.loader), 'You must first initialize the data source with `.set_data_src(<folder of images>)`'
 
+
         if not exists(self.StylEx):
             self.init_StylEx()
 
@@ -1269,7 +1273,7 @@ class Trainer():
             G_loss_fn = dual_contrastive_loss
             G_requires_reals = True
 
-
+        
 
 
 
@@ -1280,6 +1284,10 @@ class Trainer():
 
         if self.alternating_training:
             encoder_input = False
+
+            # scale these in case we're only calculating them every other step
+            rec_loss *= 2
+            kl_loss *= 2
         else:
             encoder_input = True
 
@@ -1349,22 +1357,22 @@ class Trainer():
             disc_loss = disc_loss / self.gradient_accumulate_every
 
             if self.alternating_training and encoder_input:
+                if self.kl_rec_during_disc:
+                    generated_images_w = self.StylEx.encoder(generated_images)[0]
+                    rec_loss = self.rec_scaling * reconstruction_loss(encoder_batch, generated_images, generated_images_w, encoder_output) / self.gradient_accumulate_every
+                    
+                    
+                    gen_image_classified_logits = self.classifier.classify_images(generated_images)
 
-                generated_images_w = self.StylEx.encoder(generated_images)[0]
-                rec_loss = self.rec_scaling * reconstruction_loss(encoder_batch, generated_images, generated_images_w, encoder_output) / self.gradient_accumulate_every
-                
-                
-                gen_image_classified_logits = self.classifier.classify_images(generated_images)
+                    kl_loss = self.kl_scaling * classifier_kl_loss(real_classified_logits, gen_image_classified_logits)  / self.gradient_accumulate_every
+                    #rec_loss = rec_loss / self.ttur_scaling
 
-                kl_loss = self.kl_scaling * classifier_kl_loss(real_classified_logits, gen_image_classified_logits)  / self.gradient_accumulate_every
-                #rec_loss = rec_loss / self.ttur_scaling
+                    backwards(rec_loss, self.StylEx.G_opt, loss_id=3)
+                    total_rec_loss += rec_loss.detach().item() #/ self.gradient_accumulate_every
 
-                backwards(rec_loss, self.StylEx.G_opt, loss_id=3)
-                total_rec_loss += rec_loss.detach().item() #/ self.gradient_accumulate_every
+                    backwards(kl_loss, self.StylEx.G_opt, loss_id=4)
 
-                backwards(kl_loss, self.StylEx.G_opt, loss_id=4)
-
-                total_kl_loss += kl_loss.detach().item() #/ self.gradient_accumulate_every
+                    total_kl_loss += kl_loss.detach().item() #/ self.gradient_accumulate_every
 
                 encoder_input = False
             elif self.alternating_training:
@@ -1384,6 +1392,7 @@ class Trainer():
 
         if self.alternating_training:
             encoder_input = False
+
 
 
         self.StylEx.G_opt.zero_grad()
@@ -1408,7 +1417,6 @@ class Trainer():
 
                 w_space = latent_to_w(S, style)
                 w_styles = styles_def_to_tensor(w_space)
-
 
 
             generated_images = G(w_styles, noise)
