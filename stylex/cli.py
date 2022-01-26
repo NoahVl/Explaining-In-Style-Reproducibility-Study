@@ -78,7 +78,11 @@ def train_from_folder(
         data='./mnist_images',  # Used to be data TODO: change back
         results_dir='./results',
         models_dir='./models',
+<<<<<<< HEAD:stylex/cli.py
         name='StylEx',  # Used to be 'default' (FFHQ) on my pc TODO: change back
+=======
+        name='mnist_4_proper_kl',  # Used to be 'default' (FFHQ) on my pc TODO: change back
+>>>>>>> main:gan_training_og_repo/stylegan2_pytorch/cli.py
         new=False,
         load_from=-1,
         image_size=32,
@@ -123,6 +127,7 @@ def train_from_folder(
         clear_fid_cache=False,
         seed=42,
         log=False,
+<<<<<<< HEAD:stylex/cli.py
 
         # A global scale to the custom losses
         # TODO: Check if changing encoder learning rate is more appropriate
@@ -160,6 +165,11 @@ def train_from_folder(
         dataset_name=None,
 
 
+=======
+        classifier_model_name="mnist.pth",  # TODO: Used to be FFHQ-Gender.pth
+        classifier_classes=2,  # TODO: Is 2 for faces gender.
+        sample_from_encoder=True,  # TODO: Default is False
+>>>>>>> main:gan_training_og_repo/stylegan2_pytorch/cli.py
         tensorboard_dir="tb_logs_stylex",  # TODO: None for not logging
 ):
 
@@ -201,6 +211,7 @@ def train_from_folder(
         clear_fid_cache=clear_fid_cache,
         mixed_prob=mixed_prob,
         log=log,
+<<<<<<< HEAD:stylex/cli.py
         kl_scaling=kl_scaling,
         rec_scaling=rec_scaling,
         classifier_path=classifier_path,
@@ -209,6 +220,11 @@ def train_from_folder(
         dataset_name=dataset_name,
         sample_from_encoder=sample_from_encoder,
         alternating_training=alternating_training,
+=======
+        classifier_model_name=classifier_model_name,
+        classifier_classes=classifier_classes,
+        sample_from_encoder=sample_from_encoder,
+>>>>>>> main:gan_training_og_repo/stylegan2_pytorch/cli.py
         tensorboard_dir=tensorboard_dir,
     )
 
