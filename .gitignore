@@ -3,6 +3,37 @@ __pycache__/
 *.py[cod]
 *$py.class
 
+
+# Saved models
+
+*.ckpt
+*.pth
+*.pt
+
+# datasets
+
+plant-village/*
+stylex/MNIST/*
+
+
+# Tadija's scratch notebooks
+
+
+# Tensorboard logs
+
+stylex/tb_logs_stylex/*
+
+# TRained models
+
+stylex/models/*
+stylex/trained_classifiers/*
+
+
+# Image results
+
+stylex/results/*
+
+
 # C extensions
 *.so
 

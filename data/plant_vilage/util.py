@@ -71,7 +71,7 @@ def download_plantvillage_dataset(root='./'):
   shutil.rmtree(tmp_path)
 
 
-def get_train_valid_test_dataset(path='./plant-village', train=0.7, valid=0.2,
+def get_train_valid_test_dataset(path='./plant-village', image_size=64, train=0.7, valid=0.2,
                                  test=0.1, seed=42):
   """
   Generates a train, validation and test dataset from a given image folder.
@@ -88,7 +88,15 @@ def get_train_valid_test_dataset(path='./plant-village', train=0.7, valid=0.2,
     test_set: Test dataset.
   """
 
-  dataset = ImageFolder('./plant-village')
+  transforms = torchvision.transforms.Compose([
+    torchvision.transforms.Resize(image_size),
+    torchvision.transforms.ToTensor(),
+    torchvision.transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225])
+  ])
+
+
+
+  dataset = ImageFolder('./plant-village', transform=transforms)
 
   train_cnt = round(train * len(dataset))
   valid_cnt = round(valid * len(dataset))
