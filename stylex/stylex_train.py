@@ -418,7 +418,6 @@ def reconstruction_loss(encoder_batch: torch.Tensor, generated_images: torch.Ten
 
 def classifier_kl_loss(real_classifier_logits, fake_classifier_logits):
     # Convert logits to log_softmax and then KL loss
-<<<<<<< HEAD:stylex/stylex_train.py
 
     # Get probabilities through softmax
 
@@ -433,11 +432,6 @@ def classifier_kl_loss(real_classifier_logits, fake_classifier_logits):
     real_classifier_probabilities = F.log_softmax(real_classifier_logits, dim=1)
     fake_classifier_probabilities = F.log_softmax(fake_classifier_logits, dim=1)
 
-=======
-    real_classifier_probabilities = F.log_softmax(real_classifier_logits, dim=1)
-    fake_classifier_probabilities = F.log_softmax(fake_classifier_logits, dim=1)
-
->>>>>>> main:gan_training_og_repo/stylegan2_pytorch/stylex_train.py
     loss = kl_loss(fake_classifier_probabilities, real_classifier_probabilities)
     return loss
 
@@ -1026,13 +1020,9 @@ class Trainer():
             encoder_class=None,
             alternating_training=True,
             sample_from_encoder=False,
-<<<<<<< HEAD:stylex/stylex_train.py
             dataset_name=None,
             tensorboard_dir=None,
             
-=======
-            tensorboard_dir=None,
->>>>>>> main:gan_training_og_repo/stylegan2_pytorch/stylex_train.py
             *args,
             **kwargs
     ):
@@ -1549,11 +1539,7 @@ class Trainer():
 
     @torch.no_grad()
     def evaluate(self, encoder_input=False, num=0, trunc=1.0):
-<<<<<<< HEAD:stylex/stylex_train.py
         self.StylEx.eval()
-=======
-        self.GAN.eval()
->>>>>>> main:gan_training_og_repo/stylegan2_pytorch/stylex_train.py
         # ext = self.image_extension  TODO: originally only png if self.transparency was enabled
         ext = "png"
         num_rows = self.num_image_tiles
@@ -1585,21 +1571,13 @@ class Trainer():
 
         # pass images here
 
-<<<<<<< HEAD:stylex/stylex_train.py
         generated_images = self.generate_truncated(self.StylEx.S, self.StylEx.G, latents, n, w=w, trunc_psi=self.trunc_psi)
-=======
-        generated_images = self.generate_truncated(self.GAN.S, self.GAN.G, latents, n, w=w, trunc_psi=self.trunc_psi)
->>>>>>> main:gan_training_og_repo/stylegan2_pytorch/stylex_train.py
         torchvision.utils.save_image(torch.cat((image_batch, generated_images)), str(self.results_dir / self.name / f'{str(num)}-{from_encoder_string}.{ext}'),
                                     nrow=num_rows)
 
         # moving averages
 
-<<<<<<< HEAD:stylex/stylex_train.py
         generated_images = self.generate_truncated(self.StylEx.SE, self.StylEx.GE, latents, n, w=w, trunc_psi=self.trunc_psi)
-=======
-        generated_images = self.generate_truncated(self.GAN.SE, self.GAN.GE, latents, n, w=w, trunc_psi=self.trunc_psi)
->>>>>>> main:gan_training_og_repo/stylegan2_pytorch/stylex_train.py
         torchvision.utils.save_image(torch.cat((image_batch, generated_images)), str(self.results_dir / self.name / f'{str(num)}-{from_encoder_string}-ema.{ext}'),
                                     nrow=num_rows)
 
@@ -1621,11 +1599,7 @@ class Trainer():
         tt = int(num_layers / 2)
         mixed_latents = [(tmp1, tt), (tmp2, num_layers - tt)]
 
-<<<<<<< HEAD:stylex/stylex_train.py
         generated_images = self.generate_truncated(self.StylEx.SE, self.StylEx.GE, mixed_latents, n, trunc_psi=self.trunc_psi)
-=======
-        generated_images = self.generate_truncated(self.GAN.SE, self.GAN.GE, mixed_latents, n, trunc_psi=self.trunc_psi)
->>>>>>> main:gan_training_og_repo/stylegan2_pytorch/stylex_train.py
         torchvision.utils.save_image(torch.cat((image_batch, generated_images)), str(self.results_dir / self.name / f'{str(num)}-{from_encoder_string}-mr.{ext}'),
                                      nrow=num_rows)
 
