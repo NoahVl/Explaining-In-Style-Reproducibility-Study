@@ -1292,6 +1292,9 @@ class Trainer():
 
                 encoder_output = self.StylEx.encoder(encoder_batch)[0]
                 real_classified_logits = self.classifier.classify_images(encoder_batch)
+
+                #print(real_classified_logits[:,0] > real_classified_logits[:,1])
+
                 style = [(torch.cat((encoder_output, real_classified_logits), dim=1),
                         self.StylEx.G.num_layers)]  # Has to be bracketed because expects a noise mix
                 noise = image_noise(batch_size, image_size, device=self.rank)

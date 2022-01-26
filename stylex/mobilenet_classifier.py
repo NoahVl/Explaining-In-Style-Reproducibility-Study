@@ -59,15 +59,14 @@ class MobileNet():
         Classifies a batch of images using the given model.
         """
         if isinstance(images, torch.Tensor):
-            preprocessed_images = F.interpolate(images, size=self.image_size)
+            images = F.interpolate(images, size=self.image_size)
         else:
-            preprocessed_images = self.image_transform(images)
-            preprocessed_images = F.interpolate(images, size=self.image_size)
-
-
+            images = self.image_transform(images)
+            images = F.interpolate(images, size=self.image_size)
         
         if self.normalize:
-            preprocessed_images = self.tensor_transform(preprocessed_images)
+            images = self.tensor_transform(images)
+            
 
         # Classify the images.
         return self.model(images)
