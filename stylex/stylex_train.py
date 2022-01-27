@@ -1285,8 +1285,8 @@ class Trainer():
         if self.alternating_training:
             encoder_input = False
             # multiply losses by 2 since they are only calculated every other iteration if using alternating training
-            rec_loss *= 2
-            kl_loss *= 2
+            self.rec_scaling *= 2
+            self.kl_scaling *= 2
         else:
             encoder_input = True
 
