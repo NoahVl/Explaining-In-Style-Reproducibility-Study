@@ -54,6 +54,7 @@ assert torch.cuda.is_available(), 'You need to have an Nvidia GPU with CUDA inst
 
 # Classifier
 from mobilenet_classifier import MobileNet
+from resnet_classifier import ResNet
 
 # Encoders for debugging or additional testing
 import debug_encoders
@@ -331,8 +332,8 @@ def mixed_list(n, layers, latent_dim, device):
     return noise_list(n, tt, latent_dim, device) + noise_list(n, layers - tt, latent_dim, device)
 
 
-def latent_to_w(style_vectorizer, latent_descr):
-    return [(style_vectorizer(z), num_layers) for z, num_layers in latent_descr]
+def latent_to_w(style_vectorizer, latent_descr, probabilities):
+    return [(torch.cat((style_vectorizer(z), probabilities), dim=1), num_layers) for z, num_layers in latent_descr]
 
 
 def image_noise(n, im_size, device):
@@ -413,6 +414,13 @@ def reconstruction_loss(encoder_batch: torch.Tensor, generated_images: torch.Ten
     generated_images_norm = lpips_normalize(generated_images)
 
     # LPIPS reconstruction loss
+
+    lp1 = 0.1 * lpips_loss(encoder_batch_norm, generated_images_norm).mean()
+    lp2 = 0.1 * l1_loss(encoder_w, generated_images_w)
+    lp3 = 1 * l1_loss(encoder_batch, generated_images)
+
+    #print(lp1, lp2, lp3)
+
     loss = 0.1 * lpips_loss(encoder_batch_norm, generated_images_norm).mean() + 0.1 * l1_loss(encoder_w, generated_images_w) + 1 * l1_loss(encoder_batch, generated_images)
     return loss
 
@@ -433,6 +441,8 @@ def classifier_kl_loss(real_classifier_logits, fake_classifier_logits):
     fake_classifier_probabilities = F.log_softmax(fake_classifier_logits, dim=1)
 
     loss = kl_loss(fake_classifier_probabilities, real_classifier_probabilities)
+
+    print('KL is ', loss)
     return loss
 
 # dataset
@@ -559,7 +569,7 @@ class AugWrapper(nn.Module):
         super().__init__()
         self.D = D
 
-    def forward(self, images, prob=0., types=[], detach=False):
+    def forward(self, images, probabilities=torch.Tensor([0.0, 0.0]), prob=0., types=[], detach=False):
         if random() < prob:
             images = random_hflip(images, prob=0.5)
             images = DiffAugment(images, types=types)
@@ -567,7 +577,7 @@ class AugWrapper(nn.Module):
         if detach:
             images = images.detach()
 
-        return self.D(images)
+        return self.D(images, probabilities=probabilities)
 
 
 # stylegan2 classes
@@ -812,8 +822,6 @@ class DiscriminatorE(nn.Module):
         num_layers = int(log2(image_size) - 1)
         num_init_filters = 3 if not transparent else 4
 
-
-
         blocks = []
         filters = [num_init_filters] + [(network_capacity * 4) * (2 ** i) for i in range(num_layers + 1)]
 
@@ -850,7 +858,6 @@ class DiscriminatorE(nn.Module):
         self.final_conv = nn.Conv2d(chan_last, chan_last, 3, padding=1)
         self.flatten = Flatten()
         self.encoder_dim = encoder_dim
-
     
         if not self.encoder:
             self.fc = nn.Linear(latent_dim, 2)
@@ -877,9 +884,9 @@ class DiscriminatorE(nn.Module):
 
         x = self.fc(x)
 
-        if self.encoder:
+        if not self.encoder:
             # Do a weighted sum of x[:, 0] and x[:, 1] with probabilities
-            x = x[:, 0] * probabilities[0] + x[:, 1] * probabilities[1]
+            x = x[:, 0] * probabilities[:, 0] + x[:, 1] * probabilities[:, 1]
     
         return x.squeeze() #, quantize_loss
 
@@ -902,14 +909,16 @@ class StylEx(nn.Module):
         else:
             self.encoder = debug_encoders.encoder_dict[encoder_class]
 
+        # Fixed
+        self.num_classes = 2
 
-        self.S = StyleVectorizer(latent_dim, style_depth, lr_mul=lr_mlp)
+        self.S = StyleVectorizer(latent_dim - self.num_classes, style_depth, lr_mul=lr_mlp)
         self.G = Generator(image_size, latent_dim, network_capacity, transparent=transparent, attn_layers=attn_layers,
                            no_const=no_const, fmap_max=fmap_max)
         self.D = DiscriminatorE(image_size, network_capacity, fq_layers=fq_layers, fq_dict_size=fq_dict_size,
                                attn_layers=attn_layers, transparent=transparent, fmap_max=fmap_max)
 
-        self.SE = StyleVectorizer(latent_dim, style_depth, lr_mul=lr_mlp)
+        self.SE = StyleVectorizer(latent_dim - self.num_classes, style_depth, lr_mul=lr_mlp)
         self.GE = Generator(image_size, latent_dim, network_capacity, transparent=transparent, attn_layers=attn_layers,
                             no_const=no_const)
 
@@ -1030,7 +1039,7 @@ class Trainer():
             sample_from_encoder=False,
             dataset_name=None,
             tensorboard_dir=None,
-            
+            classifier_name=None,
             *args,
             **kwargs
     ):
@@ -1082,6 +1091,7 @@ class Trainer():
         self.save_every = save_every
         self.steps = 0
 
+
         self.av = None
         self.trunc_psi = trunc_psi
 
@@ -1131,7 +1141,11 @@ class Trainer():
 
         # Load classifier
         self.num_classes = num_classes
-        self.classifier = MobileNet(classifier_path, cuda_rank=rank, output_size=self.num_classes, image_size=64)  # Automatically put into eval mode
+        self.classifier = None
+        if classifier_name.lower() == "resnet":
+            self.classifier = ResNet(classifier_path, cuda_rank=rank, output_size=self.num_classes, image_size=image_size)
+        else:
+            self.classifier = MobileNet(classifier_path, cuda_rank=rank, output_size=self.num_classes, image_size=image_size)  # Automatically put into eval mode
 
         # Load tensorboard, create writer
         self.tb_writer = None
@@ -1201,7 +1215,6 @@ class Trainer():
     
 
     def set_data_src(self, folder='./', dataset_name=None):
-        print(dataset_name)
         if dataset_name is None:
             self.dataset = Dataset(folder, self.image_size, transparent=self.transparent, aug_prob=self.dataset_aug_prob)
             num_workers = num_workers = default(self.num_workers, NUM_CORES if not self.is_ddp else 0)
@@ -1292,8 +1305,8 @@ class Trainer():
         if self.alternating_training:
             encoder_input = False
             # multiply losses by 2 since they are only calculated every other iteration if using alternating training
-            rec_loss *= 2
-            kl_loss *= 2
+            self.rec_scaling *= 2
+            self.kl_scaling *= 2
         else:
             encoder_input = True
 
@@ -1302,40 +1315,43 @@ class Trainer():
             discriminator_batch = next(self.loader).cuda(self.rank)
             discriminator_batch.requires_grad_()
 
-            if not self.alternating_training or encoder_input:
+            encoder_batch = next(self.loader).cuda(self.rank)
+            encoder_batch.requires_grad_()
 
-                
+            encoder_batch_logits = self.classifier.classify_images(encoder_batch)
+            encoder_batch_probabilities = F.softmax(encoder_batch_logits, dim=1)
+
+            if not self.alternating_training or encoder_input:
                 self.StylEx.encoder.zero_grad()
 
-                encoder_batch = next(self.loader).cuda(self.rank)
-                encoder_batch.requires_grad_()
-
-                encoder_output = self.StylEx.encoder(encoder_batch)[0]
-                real_classified_logits = self.classifier.classify_images(encoder_batch)
+                encoder_output = self.StylEx.encoder(encoder_batch)
 
                 #print(real_classified_logits[:,0] > real_classified_logits[:,1])
 
-                style = [(torch.cat((encoder_output, real_classified_logits), dim=1),
+                style = [(torch.cat((encoder_output, encoder_batch_probabilities), dim=1),
                         self.StylEx.G.num_layers)]  # Has to be bracketed because expects a noise mix
                 noise = image_noise(batch_size, image_size, device=self.rank)
-
 
                 w_styles = styles_def_to_tensor(style)
             else:
                 get_latents_fn = mixed_list if random() < self.mixed_prob else noise_list
-                style = get_latents_fn(batch_size, num_layers, latent_dim, device=self.rank)
+                style = get_latents_fn(batch_size, num_layers, latent_dim - self.num_classes, device=self.rank)
                 noise = image_noise(batch_size, image_size, device=self.rank)
 
-                w_space = latent_to_w(S, style)
+                w_space = latent_to_w(S, style, encoder_batch_probabilities)
                 w_styles = styles_def_to_tensor(w_space)
 
-        
+            #  Ah, that's a good point, we forgot to mention that fact in the paper. We folow standard procedure of conditional GAN (see for example in the BigGAN paper) 
+            #  and multiply the output of the discriminator with the conditional input.
+            #  That is used to give the discriminator information of the input class which it can use to predict whether it's a image belonging to this class or not.
+
+            # We experimented with both methods, and found that concatenating the labels to W works better. 
+            # These logits are sampled from the dataset - in fact we take the same logits which are used by the encoder in the same step. 
+
             generated_images = G(w_styles, noise)
-            fake_output, fake_q_loss = D_aug(generated_images.clone().detach(), detach=True, **aug_kwargs)
 
-            real_output, real_q_loss = D_aug(discriminator_batch, **aug_kwargs)
-
-
+            fake_output = D_aug(generated_images.clone().detach(), probabilities=encoder_batch_probabilities, detach=True, **aug_kwargs)
+            real_output = D_aug(discriminator_batch, probabilities=encoder_batch_probabilities, **aug_kwargs)
 
             real_output_loss = real_output
             fake_output_loss = fake_output
@@ -1364,13 +1380,12 @@ class Trainer():
 
             if self.alternating_training and encoder_input:
                 if self.kl_rec_during_disc:
-                    generated_images_w = self.StylEx.encoder(generated_images)[0]
-                    rec_loss = self.rec_scaling * reconstruction_loss(encoder_batch, generated_images, generated_images_w, encoder_output) / self.gradient_accumulate_every
-                    
+                    generated_images_w = self.StylEx.encoder(generated_images)
+                    rec_loss = self.rec_scaling * reconstruction_loss(encoder_batch, generated_images, generated_images_w, encoder_output) / self.gradient_accumulate_every                    
                     
                     gen_image_classified_logits = self.classifier.classify_images(generated_images)
 
-                    kl_loss = self.kl_scaling * classifier_kl_loss(real_classified_logits, gen_image_classified_logits)  / self.gradient_accumulate_every
+                    kl_loss = self.kl_scaling * classifier_kl_loss(encoder_batch_logits, gen_image_classified_logits)  / self.gradient_accumulate_every
                     #rec_loss = rec_loss / self.ttur_scaling
 
                     backwards(rec_loss, self.StylEx.G_opt, loss_id=3)
@@ -1405,36 +1420,37 @@ class Trainer():
 
         for i in gradient_accumulate_contexts(self.gradient_accumulate_every, self.is_ddp, ddps=[S, G, D_aug]):
             image_batch = next(self.loader).cuda(self.rank)
-
             image_batch.requires_grad_()
+
+            encoder_batch_logits = self.classifier.classify_images(image_batch)
+            encoder_batch_probabilities = F.softmax(encoder_batch_logits, dim=1)
 
 
             if not self.alternating_training or encoder_input:
-                encoder_output = self.StylEx.encoder(image_batch)[0]
-                real_classified_logits = self.classifier.classify_images(image_batch)
+                encoder_output = self.StylEx.encoder(image_batch)
 
-                style = [(torch.cat((encoder_output, real_classified_logits), dim=1), self.StylEx.G.num_layers)]
+                style = [(torch.cat((encoder_output, encoder_batch_probabilities), dim=1), self.StylEx.G.num_layers)]
                 noise = image_noise(batch_size, image_size, device=self.rank)
 
                 w_styles = styles_def_to_tensor(style)
             else:
-                style = get_latents_fn(batch_size, num_layers, latent_dim, device=self.rank)
+                style = get_latents_fn(batch_size, num_layers, latent_dim - self.num_classes, device=self.rank)
                 noise = image_noise(batch_size, image_size, device=self.rank)
 
-                w_space = latent_to_w(S, style)
+                w_space = latent_to_w(S, style, encoder_batch_probabilities)
                 w_styles = styles_def_to_tensor(w_space)
 
 
             generated_images = G(w_styles, noise)
             gen_image_classified_logits = self.classifier.classify_images(generated_images)
 
-            fake_output, _ = D_aug(generated_images, **aug_kwargs)
+            fake_output = D_aug(generated_images, probabilities=encoder_batch_probabilities, **aug_kwargs)
             fake_output_loss = fake_output
 
             real_output = None
             if G_requires_reals:
                 image_batch = next(self.loader).cuda(self.rank)
-                real_output, _ = D_aug(image_batch, detach=True, **aug_kwargs)
+                real_output = D_aug(image_batch, detach=True, **aug_kwargs)
                 real_output = real_output.detach()
 
             if self.top_k_training:
@@ -1443,14 +1459,16 @@ class Trainer():
                 k = math.ceil(batch_size * k_frac)
 
                 if k != batch_size:
-                    fake_output_loss, _ = fake_output_loss.topk(k=k, largest=False)
+                    fake_output_loss = fake_output_loss.topk(k=k, largest=False)
 
             # Our losses
             if not self.alternating_training or encoder_input:
-                rec_loss = self.rec_scaling * reconstruction_loss(image_batch, generated_images, self.StylEx.encoder(generated_images)[0], encoder_output) / self.gradient_accumulate_every
-                kl_loss =  self.kl_scaling * classifier_kl_loss(real_classified_logits, gen_image_classified_logits)  / self.gradient_accumulate_every
+                rec_loss = self.rec_scaling * reconstruction_loss(image_batch, generated_images, self.StylEx.encoder(generated_images), encoder_output) / self.gradient_accumulate_every
+                kl_loss =  self.kl_scaling * classifier_kl_loss(encoder_batch_logits, gen_image_classified_logits)  / self.gradient_accumulate_every
+                print('kl_loss ', kl_loss)
 
-
+            if encoder_input:
+                print('KL loss here is ', kl_loss)
 
             # Original loss
             loss = G_loss_fn(fake_output_loss, real_output)
@@ -1468,16 +1486,27 @@ class Trainer():
             gen_loss = gen_loss / self.gradient_accumulate_every
             gen_loss.register_hook(raise_if_nan)
 
+            if encoder_input:
+                print('KL loss here is !', kl_loss)
 
             if not self.alternating_training or encoder_input:
-                
-                backwards(gen_loss, self.StylEx.G_opt, loss_id=2, retain_graph=True)
-                backwards(rec_loss, self.StylEx.G_opt, loss_id=3, retain_graph=True)
-                backwards(kl_loss, self.StylEx.G_opt, loss_id=4)
+                added_losses = gen_loss + rec_loss + kl_loss
+
+                backwards(added_losses, self.StylEx.G_opt, loss_id=2)
+                #backwards(gen_loss, self.StylEx.G_opt, loss_id=2, retain_graph=True)
+                #backwards(rec_loss, self.StylEx.G_opt, loss_id=3, retain_graph=True)
+                #backwards(kl_loss, self.StylEx.G_opt, loss_id=4)
 
                 total_gen_loss += loss.detach().item() / self.gradient_accumulate_every
                 total_rec_loss += rec_loss.detach().item() 
+                
+                print('Total KL loss before: ', total_kl_loss)
+                
+                print('KL loss: ', kl_loss.detach().item())
                 total_kl_loss += kl_loss.detach().item() 
+
+                print('Total KL loss after: ', total_kl_loss)
+
    
                 self.g_loss = float(total_gen_loss)
                 self.total_rec_loss = float(total_rec_loss)
@@ -1562,9 +1591,10 @@ class Trainer():
         num_layers = self.StylEx.G.num_layers
 
 
+        print(f'encoder input is {encoder_input}')
         # latents and noise
 
-        latents = noise_list(num_rows ** 2, num_layers, latent_dim, device=self.rank)
+        latents = noise_list(num_rows ** 2, num_layers, latent_dim - self.num_classes, device=self.rank)
         n = image_noise(num_rows ** 2, image_size, device=self.rank)
 
         # regular
@@ -1576,21 +1606,28 @@ class Trainer():
             image_batch = next(self.loader).cuda(self.rank)
 
             with torch.no_grad():
-                real_classified_logits = self.classifier.classify_images(image_batch)
-                w = [(torch.cat((self.StylEx.encoder(image_batch)[0], real_classified_logits), dim=1), num_layers)]
+                probabilities = F.softmax(self.classifier.classify_images(image_batch), dim=1)
+                #w = [(torch.cat((self.StylEx.encoder(image_batch), real_classified_probabilities), dim=1), num_layers)]
+
+                w_without_probabilities = [(self.StylEx.encoder(image_batch), num_layers)]
+
             num_rows = len(image_batch)
         else:
-            w = None
+            w_without_probabilities = None
+
+            # We want a [num_rows ** 2, 2] tensor of random probabilities 
+            probabilities = torch.rand(num_rows ** 2, 2, device=self.rank)
+            probabilities = probabilities / torch.sum(probabilities, dim=1, keepdim=True)
 
         # pass images here
 
-        generated_images = self.generate_truncated(self.StylEx.S, self.StylEx.G, latents, n, w=w, trunc_psi=self.trunc_psi)
+        generated_images = self.generate_truncated(self.StylEx.S, self.StylEx.G, latents, n, w=w_without_probabilities, probabilities=probabilities,  trunc_psi=self.trunc_psi)
         torchvision.utils.save_image(torch.cat((image_batch, generated_images)), str(self.results_dir / self.name / f'{str(num)}-{from_encoder_string}.{ext}'),
                                     nrow=num_rows)
 
         # moving averages
 
-        generated_images = self.generate_truncated(self.StylEx.SE, self.StylEx.GE, latents, n, w=w, trunc_psi=self.trunc_psi)
+        generated_images = self.generate_truncated(self.StylEx.SE, self.StylEx.GE, latents, n, w=w_without_probabilities, probabilities=probabilities, trunc_psi=self.trunc_psi)
         torchvision.utils.save_image(torch.cat((image_batch, generated_images)), str(self.results_dir / self.name / f'{str(num)}-{from_encoder_string}-ema.{ext}'),
                                     nrow=num_rows)
 
@@ -1605,14 +1642,17 @@ class Trainer():
                 np.concatenate([init_dim * np.arange(n_tile) + i for i in range(init_dim)])).cuda(self.rank)
             return torch.index_select(a, dim, order_index)
 
-        nn = noise(num_rows, latent_dim, device=self.rank)
+        nn = noise(num_rows, latent_dim - self.num_classes, device=self.rank)
         tmp1 = tile(nn, 0, num_rows)
         tmp2 = nn.repeat(num_rows, 1)
 
         tt = int(num_layers / 2)
         mixed_latents = [(tmp1, tt), (tmp2, num_layers - tt)]
 
-        generated_images = self.generate_truncated(self.StylEx.SE, self.StylEx.GE, mixed_latents, n, trunc_psi=self.trunc_psi)
+        probabilities = torch.rand(num_rows ** 2, 2, device=self.rank)
+        probabilities = probabilities / torch.sum(probabilities, dim=1, keepdim=True)
+
+        generated_images = self.generate_truncated(self.StylEx.SE, self.StylEx.GE, mixed_latents, n, probabilities=probabilities, trunc_psi=self.trunc_psi)
         torchvision.utils.save_image(torch.cat((image_batch, generated_images)), str(self.results_dir / self.name / f'{str(num)}-{from_encoder_string}-mr.{ext}'),
                                      nrow=num_rows)
 
@@ -1670,7 +1710,7 @@ class Trainer():
         latent_dim = self.StylEx.G.latent_dim
 
         if not exists(self.av):
-            z = noise(2000, latent_dim, device=self.rank)
+            z = noise(2000, latent_dim - self.num_classes, device=self.rank)
             samples = evaluate_in_chunks(batch_size, S, z).cpu().numpy()
             self.av = np.mean(samples, axis=0)
             self.av = np.expand_dims(self.av, axis=0)
@@ -1684,15 +1724,18 @@ class Trainer():
         w_space = []
         for tensor, num_layers in w:
             tensor = self.truncate_style(tensor, trunc_psi=trunc_psi)
-            w_space.append((tensor, num_layers))
+            w_space.append(tensor)
         return w_space
 
     @torch.no_grad()
-    def generate_truncated(self, S, G, style, noi, w=None, trunc_psi=0.75, num_image_tiles=8):
+    def generate_truncated(self, S, G, style, noi, w=None, trunc_psi=0.75, probabilities=None, num_image_tiles=8):
         if w is None:
             w = map(lambda t: (S(t[0]), t[1]), style)
 
         w_truncated = self.truncate_style_defs(w, trunc_psi=trunc_psi)
+
+        w_truncated = [(torch.cat((w_truncated[0], probabilities), dim=1), self.StylEx.G.num_layers)]
+
         w_styles = styles_def_to_tensor(w_truncated)
         generated_images = evaluate_in_chunks(self.batch_size, G, w_styles, noi)
         return generated_images.clamp_(0., 1.)
@@ -1709,6 +1752,12 @@ class Trainer():
 
         # latents and noise
 
+        image_batch = next(self.loader).cuda(self.rank)
+        image_batch.requires_grad_()
+
+        real_classified_logits = self.classifier.classify_images(image_batch[0])
+
+
         latents_low = noise(num_rows ** 2, latent_dim, device=self.rank)
         latents_high = noise(num_rows ** 2, latent_dim, device=self.rank)
         n = image_noise(num_rows ** 2, image_size, device=self.rank)
@@ -1718,7 +1767,7 @@ class Trainer():
         frames = []
         for ratio in tqdm(ratios):
             interp_latents = slerp(ratio, latents_low, latents_high)
-            latents = [(interp_latents, num_layers)]
+            latents = [(torch.cat((interp_latents, real_classified_logits), dim=1) , num_layers)]
             generated_images = self.generate_truncated(self.StylEx.SE, self.StylEx.GE, latents, n, trunc_psi=self.trunc_psi)
             images_grid = torchvision.utils.make_grid(generated_images, nrow=num_rows)
             pil_image = transforms.ToPILImage()(images_grid.cpu())

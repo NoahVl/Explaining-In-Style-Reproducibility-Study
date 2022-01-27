@@ -167,6 +167,9 @@ def train_from_folder(
 
 
         tensorboard_dir="tb_logs_stylex",  # TODO: None for not logging
+
+        # Classifier name <MobileNet or ResNet> (non case sensitive)
+        classifier_name="MobileNet"
 ):
 
     model_args = dict(
@@ -217,6 +220,7 @@ def train_from_folder(
         alternating_training=alternating_training,
         kl_rec_during_disc=kl_rec_during_disc,   
         tensorboard_dir=tensorboard_dir,
+        classifier_name=classifier_name
     )
 
 
