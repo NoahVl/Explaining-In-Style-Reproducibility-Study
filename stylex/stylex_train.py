@@ -442,7 +442,6 @@ def classifier_kl_loss(real_classifier_logits, fake_classifier_logits):
 
     loss = kl_loss(fake_classifier_probabilities, real_classifier_probabilities)
 
-    print('KL is ', loss)
     return loss
 
 # dataset
@@ -1139,6 +1138,14 @@ class Trainer():
 
         self.logger = aim.Session(experiment=name) if log else None
 
+        if self.alternating_training:
+  
+            # multiply losses by 2 since they are only calculated every other iteration if using alternating training
+            self.rec_scaling *= 2
+            self.kl_scaling *= 2
+        else:
+            encoder_input = True
+
         # Load classifier
         self.num_classes = num_classes
         self.classifier = None
@@ -1150,13 +1157,7 @@ class Trainer():
         # Load tensorboard, create writer
         self.tb_writer = None
         if exists(tensorboard_dir):
-            self.tb_writer = SummaryWriter(tensorboard_dir)
-
-
-        # Load tensorboard, create writer
-        self.tb_writer = None
-        if exists(tensorboard_dir):
-            self.tb_writer = SummaryWriter(tensorboard_dir)
+            self.tb_writer = SummaryWriter(os.path.join(tensorboard_dir, name))
 
 
     @property
@@ -1303,13 +1304,9 @@ class Trainer():
         self.StylEx.D_opt.zero_grad()
 
         if self.alternating_training:
-            encoder_input = False
-            # multiply losses by 2 since they are only calculated every other iteration if using alternating training
-            self.rec_scaling *= 2
-            self.kl_scaling *= 2
+          encoder_input = False
         else:
             encoder_input = True
-
 
         for i in gradient_accumulate_contexts(self.gradient_accumulate_every, self.is_ddp, ddps=[D_aug, S, G]):
             discriminator_batch = next(self.loader).cuda(self.rank)
@@ -1465,10 +1462,10 @@ class Trainer():
             if not self.alternating_training or encoder_input:
                 rec_loss = self.rec_scaling * reconstruction_loss(image_batch, generated_images, self.StylEx.encoder(generated_images), encoder_output) / self.gradient_accumulate_every
                 kl_loss =  self.kl_scaling * classifier_kl_loss(encoder_batch_logits, gen_image_classified_logits)  / self.gradient_accumulate_every
-                print('kl_loss ', kl_loss)
+                
+                # < > *  2 ** (num of iters)
 
-            if encoder_input:
-                print('KL loss here is ', kl_loss)
+
 
             # Original loss
             loss = G_loss_fn(fake_output_loss, real_output)
@@ -1486,8 +1483,6 @@ class Trainer():
             gen_loss = gen_loss / self.gradient_accumulate_every
             gen_loss.register_hook(raise_if_nan)
 
-            if encoder_input:
-                print('KL loss here is !', kl_loss)
 
             if not self.alternating_training or encoder_input:
                 added_losses = gen_loss + rec_loss + kl_loss
@@ -1500,14 +1495,8 @@ class Trainer():
                 total_gen_loss += loss.detach().item() / self.gradient_accumulate_every
                 total_rec_loss += rec_loss.detach().item() 
                 
-                print('Total KL loss before: ', total_kl_loss)
-                
-                print('KL loss: ', kl_loss.detach().item())
                 total_kl_loss += kl_loss.detach().item() 
 
-                print('Total KL loss after: ', total_kl_loss)
-
-   
                 self.g_loss = float(total_gen_loss)
                 self.total_rec_loss = float(total_rec_loss)
                 self.total_kl_loss = float(total_kl_loss)
