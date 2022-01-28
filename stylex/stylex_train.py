@@ -669,6 +669,12 @@ class Conv2DMod(nn.Module):
 class GeneratorBlock(nn.Module):
     def __init__(self, latent_dim, input_channels, filters, upsample=True, upsample_rgb=True, rgba=False):
         super().__init__()
+
+        self.input_channels = input_channels
+        self.filters = filters
+
+        self.num_style_coords = self.input_channels + self.filters
+
         self.upsample = nn.Upsample(scale_factor=2, mode='bilinear', align_corners=False) if upsample else None
 
         self.to_style1 = nn.Linear(latent_dim, input_channels)
@@ -682,9 +688,7 @@ class GeneratorBlock(nn.Module):
         self.activation = leaky_relu()
         self.to_rgb = RGBBlock(latent_dim, filters, upsample_rgb, rgba)
 
-    
-
-    def forward(self, x, prev_rgb, istyle, inoise, perturb=False, coords=[], D=[]):
+    def forward(self, x, prev_rgb, istyle, inoise):
         if exists(self.upsample):
             x = self.upsample(x)
 
@@ -701,13 +705,16 @@ class GeneratorBlock(nn.Module):
 
         style2 = self.to_style2(istyle)
 
+        style_coords = torch.cat([style1, style2], dim=-1)
+
         # Perturb here
 
         x = self.conv2(x, style2)
         x = self.activation(x + noise2)
 
         rgb = self.to_rgb(x, prev_rgb, istyle)
-        return x, rgb
+
+        return x, rgb, style_coords
 
 
 class DiscriminatorBlock(nn.Module):
@@ -783,7 +790,7 @@ class Generator(nn.Module):
             )
             self.blocks.append(block)
 
-    def forward(self, styles, input_noise):
+    def forward(self, styles, input_noise, get_style_coords=False):
         batch_size = styles.shape[0]
         image_size = self.image_size
 
@@ -797,13 +804,38 @@ class Generator(nn.Module):
         styles = styles.transpose(0, 1)
         x = self.initial_conv(x)
 
+        if get_style_coords:
+            style_coords_list = []
+
         for style, block, attn in zip(styles, self.blocks, self.attns):
             if exists(attn):
                 x = attn(x)
-            x, rgb = block(x, rgb, style, input_noise)
 
-        return rgb
+            x, rgb, style_coords = block(x, rgb, style, input_noise)
 
+            if get_style_coords:
+                style_coords_list.append(style_coords)
+
+        if get_style_coords:
+            style_coords = torch.cat(style_coords_list, dim=1)
+            return rgb, style_coords
+
+        else:
+            return rgb
+
+    def get_style_coords(self, styles):
+        batch_size = styles.shape[0]
+        image_size = self.image_size
+
+        if self.no_const:
+            avg_style = styles.mean(dim=1)[:, :, None, None]
+            x = self.to_initial_block(avg_style)
+        else:
+            x = self.initial_block.expand(batch_size, -1, -1, -1)
+
+        rgb = None
+        styles = styles.transpose(0, 1)
+        x = self.initial_conv(x)
 
 class DiscriminatorE(nn.Module):
     def __init__(self, image_size, network_capacity=16, fq_layers=[], fq_dict_size=256, attn_layers=[],
