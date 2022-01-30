@@ -1,0 +1,9 @@
+fire==0.4.0
+lpips==0.1.4
+einops==0.4.0
+kornia==0.6.2
+vector-quantize-pytorch==0.4.10
+Pillow==9.0.0
+aim==3.4.1
+pathlib==1.0.1
+torch-summary==1.4.5
