@@ -42,10 +42,12 @@ def download_plantvillage_dataset(root='./'):
   zip_path = os.path.join(tmp_path, 'dataset.zip')
   
   # Download the dataset
+  print("Downloading dataset...")
   r = requests.get(plantvillage_url, allow_redirects=True)
   open(zip_path, 'wb').write(r.content)
 
   # Unzip the dataset contents
+  print("Unzipping dataset...")
   with zipfile.ZipFile(zip_path, 'r') as zip_ref:
     zip_ref.extractall(tmp_path)
 
@@ -114,3 +116,6 @@ def get_train_valid_test_dataset(path='./plant-village', image_size=64, train=0.
                                   )
   
   return train_set, valid_set, test_set
+
+if __name__ == "__main__":
+  download_plantvillage_dataset("./plant_data")
