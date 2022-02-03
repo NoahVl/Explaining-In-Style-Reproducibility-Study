@@ -62,7 +62,7 @@ class MobileNet():
             preprocessed_images = F.interpolate(images, size=self.image_size)
         else:
             preprocessed_images = self.image_transform(images)
-            preprocessed_images = F.interpolate(images, size=self.image_size)
+            preprocessed_images = F.interpolate(preprocessed_images, size=self.image_size)
 
         # I trained on MNIST without normalizing, but it still worked,
         # so I made normalization optional
@@ -70,4 +70,4 @@ class MobileNet():
             preprocessed_images = self.tensor_transform(preprocessed_images)
 
         # Classify the images.
-        return self.model(images)
+        return self.model(preprocessed_images)

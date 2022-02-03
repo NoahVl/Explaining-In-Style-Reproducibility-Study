@@ -13,7 +13,6 @@ import torch.distributed as dist
 
 import numpy as np
 
-from attrfind import run_attrfind
 
 
 def cast_list(el):
@@ -59,7 +58,10 @@ def run_training(rank, world_size, model_args, data, load_from, new, num_train_s
     else:
         model.clear()
 
+
     model.set_data_src(data, dataset_name=dataset_name)
+
+
 
     progress_bar = tqdm(initial=model.steps, total=num_train_steps, mininterval=10., desc=f'{name}<{data}>')
     while model.steps < num_train_steps:
@@ -75,44 +77,26 @@ def run_training(rank, world_size, model_args, data, load_from, new, num_train_s
         dist.destroy_process_group()
 
 
-"""
-image_size, latent_dim=514, fmap_max=512, network_capacity=16, transparent=False,
-                 fp16=False, cl_reg=False, steps=1, lr=1e-4, ttur_mult=2, fq_layers=[], fq_dict_size=256,
-                 attn_layers=[], no_const=False, lr_mlp=0.1, rank=0, classifier_labels=2, encoder_class=None
-"""
-
-
-def attrfind(
-        data='./',
-        stylex_path='',
-        classifier_name='',
-        image_size=32,
-        n_images=4,
-        batch_size=2,
-):
-    run_attrfind(data, stylex_path, classifier_name, image_size, n_images, batch_size)
-
-
 def train_from_folder(
-        data='./mnist_images',  # Used to be data TODO: change back
+        data='./data',  # Used to be data TODO: change back
         results_dir='./results',
         models_dir='./models',
-        name='StylEx',  # Used to be 'default' (FFHQ) on my pc TODO: change back
+        name='Faces-Resnet-ResizeFix64',  # Used to be 'default' (FFHQ) on my pc TODO: change back
         new=False,
         load_from=-1,
-        image_size=32,
+        image_size=64,
         network_capacity=16,
-        fmap_max=512,  # 512
+        fmap_max=512,   # 512
         transparent=False,
-        batch_size=5,
-        gradient_accumulate_every=2,
+        batch_size=4,
+        gradient_accumulate_every=4,
         num_train_steps=150000,
         learning_rate=2e-4,
         lr_mlp=0.1,
         ttur_mult=1.5,
         rel_disc_loss=False,
-        num_workers=4,  # None
-        save_every=1000,  # 1000
+        num_workers=3,  # None
+        save_every=500,  # 1000
         evaluate_every=50,  # 1000
         generate=False,
         num_generate=1,
@@ -147,13 +131,13 @@ def train_from_folder(
         # TODO: Check if changing encoder learning rate is more appropriate
         #       than rescaling the reconstruction loss
         kl_scaling=1,
-        rec_scaling=5,
+        rec_scaling=1,
 
         # Path to the classifier
-        classifier_path="mnist32.pth",
+        classifier_path="resnet-18-64px-unfreezel4.pt",
 
         # This shouldn't ever be changed since we're working with
-        # binary classification.
+        # binary classificiation.
         num_classes=2,  # TODO: Is 2 for faces gender.
 
         # If unspecified, use the Discriminator as an encoder.
@@ -161,6 +145,9 @@ def train_from_folder(
         # Check out debug_endocers.py for the names of classes if you still want
         # to use a different encoder.
         encoder_class=None,
+
+
+        kl_rec_during_disc=False,
 
         # This is for making the image results be results of the
         # image -> encoder -> generator pipeline
@@ -173,13 +160,18 @@ def train_from_folder(
         # using the encoder
         alternating_training=True,
 
-        # For now, I've made it so dataset_name='MNIST' automatically 
+        # For now, I've made it so dataset_name='MNIST' automatically
         # loads and rebalances a 1 vs all MNIST dataset.
         # TODO: Make custom dataloaders work in a distributed setting (low priority)
         dataset_name=None,
 
+
         tensorboard_dir="tb_logs_stylex",  # TODO: None for not logging
+
+        # Classifier name <MobileNet or ResNet> (non case sensitive)
+        classifier_name="ResNet"
 ):
+
     model_args = dict(
         name=name,
         results_dir=results_dir,
@@ -226,8 +218,12 @@ def train_from_folder(
         dataset_name=dataset_name,
         sample_from_encoder=sample_from_encoder,
         alternating_training=alternating_training,
+        kl_rec_during_disc=kl_rec_during_disc,
         tensorboard_dir=tensorboard_dir,
+        classifier_name=classifier_name
     )
+
+
 
     if generate:
         model = Trainer(**model_args)
@@ -260,10 +256,7 @@ def train_from_folder(
 
 
 def main():
-    # python cli.py train_from_folder --asdasd
-    # python cli.py attrfind --asdasdasd
-
-    fire.Fire()
+    fire.Fire(train_from_folder)
 
 
 if __name__ == '__main__':
