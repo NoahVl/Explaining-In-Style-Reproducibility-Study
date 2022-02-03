@@ -1,0 +1,42 @@
+Same transformation in top-right 
+ (0, 5) 
+ [[   0  486]
+ [   0  486]
+ [   0  486]
+ [   0 2416]] 
+
+Same transformation in top-right 
+ (1, 4) 
+ [[   0  342]
+ [   0  342]
+ [   0  342]
+ [   0 2449]] 
+
+Same transformation in top-right 
+ (2, 1) 
+ [[  1 303]
+ [  1 303]
+ [  1 303]
+ [  0 342]] 
+
+Same transformation in top-right 
+ (3, 2) 
+ [[  1 917]
+ [  1 917]
+ [  1 917]
+ [  1 303]] 
+
+Same transformation in top-right 
+ (4, 0) 
+ [[   0 2449]
+ [   0 2449]
+ [   0 2449]
+ [   0  486]] 
+
+Same transformation in bottom-right 
+ (5, 3) 
+ [[   0 2416]
+ [   1  917]
+ [   0 2416]
+ [   0 2416]] 
+
