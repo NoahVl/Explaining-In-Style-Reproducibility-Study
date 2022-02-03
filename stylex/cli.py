@@ -1,3 +1,4 @@
+# Imports
 import os
 import fire
 import random
@@ -5,7 +6,6 @@ from retry.api import retry_call
 from tqdm import tqdm
 from datetime import datetime
 from functools import wraps
-from stylex_train import Trainer, NanException
 
 import torch
 import torch.multiprocessing as mp
@@ -13,6 +13,13 @@ import torch.distributed as dist
 
 import numpy as np
 
+# Only change this to False if you have read the README! Might cause worse training.
+USE_OLD_ARCHITECTURE = True
+
+if USE_OLD_ARCHITECTURE:
+    from stylex_train import Trainer, NanException
+else:
+    from stylex_train_new import Trainer, NanException
 
 
 def cast_list(el):
@@ -58,10 +65,7 @@ def run_training(rank, world_size, model_args, data, load_from, new, num_train_s
     else:
         model.clear()
 
-
     model.set_data_src(data, dataset_name=dataset_name)
-
-
 
     progress_bar = tqdm(initial=model.steps, total=num_train_steps, mininterval=10., desc=f'{name}<{data}>')
     while model.steps < num_train_steps:
@@ -78,7 +82,7 @@ def run_training(rank, world_size, model_args, data, load_from, new, num_train_s
 
 
 def train_from_folder(
-        data='./data',  # Used to be data TODO: change back
+        data='../data',  # Used to be data TODO: change back
         results_dir='./results',
         models_dir='./models',
         name='Faces-Resnet-ResizeFix64',  # Used to be 'default' (FFHQ) on my pc TODO: change back
@@ -86,7 +90,7 @@ def train_from_folder(
         load_from=-1,
         image_size=64,
         network_capacity=16,
-        fmap_max=512,   # 512
+        fmap_max=512,  # 512
         transparent=False,
         batch_size=4,
         gradient_accumulate_every=4,
@@ -133,6 +137,9 @@ def train_from_folder(
         kl_scaling=1,
         rec_scaling=1,
 
+        # Classifier name <MobileNet or ResNet> (non case sensitive)
+        classifier_name="ResNet",
+
         # Path to the classifier
         classifier_path="resnet-18-64px-unfreezel4.pt",
 
@@ -145,7 +152,6 @@ def train_from_folder(
         # Check out debug_endocers.py for the names of classes if you still want
         # to use a different encoder.
         encoder_class=None,
-
 
         kl_rec_during_disc=False,
 
@@ -160,18 +166,11 @@ def train_from_folder(
         # using the encoder
         alternating_training=True,
 
-        # For now, I've made it so dataset_name='MNIST' automatically
-        # loads and rebalances a 1 vs all MNIST dataset.
-        # TODO: Make custom dataloaders work in a distributed setting (low priority)
+        # If dataset_name='MNIST' automatically loads and rebalances a 1 vs all MNIST dataset.
         dataset_name=None,
 
-
-        tensorboard_dir="tb_logs_stylex",  # TODO: None for not logging
-
-        # Classifier name <MobileNet or ResNet> (non case sensitive)
-        classifier_name="ResNet"
+        tensorboard_dir="tb_logs_stylex"  # Put to None for not logging
 ):
-
     model_args = dict(
         name=name,
         results_dir=results_dir,
@@ -222,8 +221,6 @@ def train_from_folder(
         tensorboard_dir=tensorboard_dir,
         classifier_name=classifier_name
     )
-
-
 
     if generate:
         model = Trainer(**model_args)
