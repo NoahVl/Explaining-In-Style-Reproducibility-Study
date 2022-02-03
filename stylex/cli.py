@@ -78,25 +78,25 @@ def run_training(rank, world_size, model_args, data, load_from, new, num_train_s
 
 
 def train_from_folder(
-        data='./mnist_images',  # Used to be data TODO: change back
+        data='./data',  # Used to be data TODO: change back
         results_dir='./results',
         models_dir='./models',
-        name='StylEx',  # Used to be 'default' (FFHQ) on my pc TODO: change back
+        name='Faces-Resnet-ResizeFix64',  # Used to be 'default' (FFHQ) on my pc TODO: change back
         new=False,
         load_from=-1,
-        image_size=32,
+        image_size=64,
         network_capacity=16,
         fmap_max=512,   # 512
         transparent=False,
-        batch_size=5,
-        gradient_accumulate_every=2,
+        batch_size=4,
+        gradient_accumulate_every=4,
         num_train_steps=150000,
         learning_rate=2e-4,
         lr_mlp=0.1,
         ttur_mult=1.5,
         rel_disc_loss=False,
-        num_workers=4,  # None
-        save_every=1000,  # 1000
+        num_workers=3,  # None
+        save_every=500,  # 1000
         evaluate_every=50,  # 1000
         generate=False,
         num_generate=1,
@@ -131,10 +131,10 @@ def train_from_folder(
         # TODO: Check if changing encoder learning rate is more appropriate
         #       than rescaling the reconstruction loss
         kl_scaling=1,
-        rec_scaling=5,
+        rec_scaling=1,
 
         # Path to the classifier
-        classifier_path="mnist.pth",
+        classifier_path="resnet-18-64px-unfreezel4.pt",
 
         # This shouldn't ever be changed since we're working with
         # binary classificiation.
@@ -153,20 +153,23 @@ def train_from_folder(
         # image -> encoder -> generator pipeline
         # Set False if training a standard GAN or if you want to see
         # examples from a noise vector
-        sample_from_encoder=True,  
+        sample_from_encoder=True,
 
         # Alternatively trains the model with the StylEx loss
         # and the regular StyleGAN loss. If False just trains
         # using the encoder
         alternating_training=True,
 
-        # For now, I've made it so dataset_name='MNIST' automatically 
+        # For now, I've made it so dataset_name='MNIST' automatically
         # loads and rebalances a 1 vs all MNIST dataset.
         # TODO: Make custom dataloaders work in a distributed setting (low priority)
         dataset_name=None,
 
 
         tensorboard_dir="tb_logs_stylex",  # TODO: None for not logging
+
+        # Classifier name <MobileNet or ResNet> (non case sensitive)
+        classifier_name="ResNet"
 ):
 
     model_args = dict(
@@ -215,8 +218,9 @@ def train_from_folder(
         dataset_name=dataset_name,
         sample_from_encoder=sample_from_encoder,
         alternating_training=alternating_training,
-        kl_rec_during_disc=kl_rec_during_disc,   
+        kl_rec_during_disc=kl_rec_during_disc,
         tensorboard_dir=tensorboard_dir,
+        classifier_name=classifier_name
     )
 
 

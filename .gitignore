@@ -23,11 +23,10 @@ stylex/MNIST/*
 
 stylex/tb_logs_stylex/*
 
-# TRained models
+# Trained models
 
 stylex/models/*
-stylex/trained_classifiers/*
-
+stylex/trained_classifiers/*#
 
 # Image results
 
@@ -164,3 +163,10 @@ dmypy.json
 
 # Data for models
 flickrfaceshq-dataset-nvidia-resized-256px/
+
+# Vscode
+*.vscode/
+/data/CelebA/celeba-dataset/
+
+# Due to licensing, don't include fonts
+/stylex/Roboto-Bold.ttf

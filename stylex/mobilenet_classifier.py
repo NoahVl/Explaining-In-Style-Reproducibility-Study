@@ -59,14 +59,15 @@ class MobileNet():
         Classifies a batch of images using the given model.
         """
         if isinstance(images, torch.Tensor):
-            images = F.interpolate(images, size=self.image_size)
+            preprocessed_images = F.interpolate(images, size=self.image_size)
         else:
-            images = self.image_transform(images)
-            images = F.interpolate(images, size=self.image_size)
-        
+            preprocessed_images = self.image_transform(images)
+            preprocessed_images = F.interpolate(preprocessed_images, size=self.image_size)
+
+        # I trained on MNIST without normalizing, but it still worked,
+        # so I made normalization optional
         if self.normalize:
-            images = self.tensor_transform(images)
-            
+            preprocessed_images = self.tensor_transform(preprocessed_images)
 
         # Classify the images.
-        return self.model(images)
+        return self.model(preprocessed_images)

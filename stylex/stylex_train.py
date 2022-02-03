@@ -4,7 +4,7 @@ import math
 import fire
 import json
 
-import lpips
+#import lpips  TODO: Change back
 from torch.utils.tensorboard import SummaryWriter
 
 from tqdm import tqdm
@@ -39,8 +39,6 @@ from vector_quantize_pytorch import VectorQuantize
 from PIL import Image
 from pathlib import Path
 
-
-
 try:
     from apex import amp
 
@@ -57,7 +55,6 @@ from mobilenet_classifier import MobileNet
 
 # Encoders for debugging or additional testing
 import debug_encoders
-
 
 # constants
 
@@ -211,23 +208,23 @@ attn_and_ff = lambda chan: nn.Sequential(*[
 # helpers
 
 
-def make_weights_for_balanced_classes(dataset, nclasses):                        
-    count = [0] * nclasses                                 
+def make_weights_for_balanced_classes(dataset, nclasses):
+    count = [0] * nclasses
 
-    print(count)                     
-    for item in dataset:     
+    print(count)
+    for item in dataset:
 
         if len(item) == 1:
-            print(item)        
-        count[item[1]] += 1                                                     
-    weight_per_class = [0.] * nclasses                                      
-    N = float(sum(count))                                                   
-    for i in range(nclasses):                                                   
-        weight_per_class[i] = N/float(count[i])                                 
-    weight = [0] * len(dataset)                                              
-    for idx, val in enumerate(dataset):                                          
-        weight[idx] = weight_per_class[val[1]]                                  
-    return weight    
+            print(item)
+        count[item[1]] += 1
+    weight_per_class = [0.] * nclasses
+    N = float(sum(count))
+    for i in range(nclasses):
+        weight_per_class[i] = N / float(count[i])
+    weight = [0] * len(dataset)
+    for idx, val in enumerate(dataset):
+        weight[idx] = weight_per_class[val[1]]
+    return weight
 
 
 def exists(val):
@@ -378,6 +375,7 @@ def lpips_normalize(images):
     _min = images_flattened.min(dim=1)[0].view(-1, 1, 1, 1)
     return (images - _min) / (_max - _min) * 2 - 1
 
+
 # losses
 
 def gen_hinge_loss(fake, real):
@@ -402,7 +400,7 @@ def dual_contrastive_loss(real_logits, fake_logits):
 
 
 # Our losses
-lpips_loss = lpips.LPIPS(net="alex").cuda(0)  # image should be RGB, IMPORTANT: normalized to [-1,1]
+#lpips_loss = lpips.LPIPS(net="alex").cuda(0)  # image should be RGB, IMPORTANT: normalized to [-1,1]  #TODO: Change back
 l1_loss = nn.L1Loss()
 kl_loss = nn.KLDivLoss(reduction="batchmean", log_target=True)
 
@@ -413,8 +411,11 @@ def reconstruction_loss(encoder_batch: torch.Tensor, generated_images: torch.Ten
     generated_images_norm = lpips_normalize(generated_images)
 
     # LPIPS reconstruction loss
-    loss = 0.1 * lpips_loss(encoder_batch_norm, generated_images_norm).mean() + 0.1 * l1_loss(encoder_w, generated_images_w) + 1 * l1_loss(encoder_batch, generated_images)
+    loss = 0.1 * lpips_loss(encoder_batch_norm, generated_images_norm).mean() + 0.1 * l1_loss(encoder_w,
+                                                                                              generated_images_w) + 1 * l1_loss(
+        encoder_batch, generated_images)
     return loss
+
 
 def classifier_kl_loss(real_classifier_logits, fake_classifier_logits):
     # Convert logits to log_softmax and then KL loss
@@ -434,6 +435,7 @@ def classifier_kl_loss(real_classifier_logits, fake_classifier_logits):
 
     loss = kl_loss(fake_classifier_probabilities, real_classifier_probabilities)
     return loss
+
 
 # dataset
 
@@ -491,14 +493,13 @@ def resize_to_minimum_size(min_size, image):
 
 class MNIST_1vA(torch.utils.data.Dataset):
     def __init__(self, folder='./', digit=8):
-        self.image_size = 32
+        self.image_size = 32  # TODO: No hardcoding.
 
         self.transform = transforms.Compose([
-                        transforms.Resize(32),
-                        transforms.ToTensor(),
-                        transforms.Lambda(lambda x: x.repeat(3, 1, 1) )
-                    ])
-
+            transforms.Resize(32),
+            transforms.ToTensor(),
+            transforms.Lambda(lambda x: x.repeat(3, 1, 1))
+        ])
 
         self.dataset = torchvision.datasets.MNIST(folder, train=True, download=True, transform=self.transform)
         self.dataset.targets = self.dataset.targets == digit
@@ -513,7 +514,6 @@ class MNIST_1vA(torch.utils.data.Dataset):
 
     def __len__(self):
         return len(self.dataset)
-
 
 
 class Dataset(data.Dataset):
@@ -837,13 +837,13 @@ class Generator(nn.Module):
         styles = styles.transpose(0, 1)
         x = self.initial_conv(x)
 
+
 class DiscriminatorE(nn.Module):
     def __init__(self, image_size, network_capacity=16, fq_layers=[], fq_dict_size=256, attn_layers=[],
                  transparent=False, encoder=False, encoder_dim=512, fmap_max=512):
         super().__init__()
         num_layers = int(log2(image_size) - 1)
         num_init_filters = 3 if not transparent else 4
-
 
         blocks = []
         filters = [num_init_filters] + [(network_capacity * 4) * (2 ** i) for i in range(num_layers + 1)]
@@ -880,11 +880,11 @@ class DiscriminatorE(nn.Module):
         self.final_conv = nn.Conv2d(chan_last, chan_last, 3, padding=1)
         self.flatten = Flatten()
         self.encoder_dim = encoder_dim
-    
+
         if not encoder:
             self.fc = nn.Linear(latent_dim, 1)
         else:
-            self.fc = nn.Linear(latent_dim,  self.encoder_dim)
+            self.fc = nn.Linear(latent_dim, self.encoder_dim)
 
     def forward(self, x):
         b, *_ = x.shape
@@ -904,9 +904,8 @@ class DiscriminatorE(nn.Module):
         x = self.final_conv(x)
         x = self.flatten(x)
 
-
         x = self.fc(x)
-        return x.squeeze(), quantize_loss
+        return x.squeeze()
 
 
 class StylEx(nn.Module):
@@ -920,26 +919,24 @@ class StylEx(nn.Module):
 
         # DiscriminatorEncoder is default unless specified by encoder class name
 
-
         if encoder_class is None:
-            self.encoder= DiscriminatorE(image_size, network_capacity, encoder=True, fq_layers=fq_layers, fq_dict_size=fq_dict_size,
-                               attn_layers=attn_layers, transparent=transparent, fmap_max=fmap_max)
+            self.encoder = DiscriminatorE(image_size, network_capacity, encoder=True, fq_layers=fq_layers,
+                                          fq_dict_size=fq_dict_size,
+                                          attn_layers=attn_layers, transparent=transparent, fmap_max=fmap_max)
         else:
             self.encoder = debug_encoders.encoder_dict[encoder_class]
-
 
         self.S = StyleVectorizer(latent_dim, style_depth, lr_mul=lr_mlp)
         self.G = Generator(image_size, latent_dim, network_capacity, transparent=transparent, attn_layers=attn_layers,
                            no_const=no_const, fmap_max=fmap_max)
         self.D = DiscriminatorE(image_size, network_capacity, fq_layers=fq_layers, fq_dict_size=fq_dict_size,
-                               attn_layers=attn_layers, transparent=transparent, fmap_max=fmap_max)
+                                attn_layers=attn_layers, transparent=transparent, fmap_max=fmap_max)
 
         self.SE = StyleVectorizer(latent_dim, style_depth, lr_mul=lr_mlp)
         self.GE = Generator(image_size, latent_dim, network_capacity, transparent=transparent, attn_layers=attn_layers,
                             no_const=no_const)
 
         self.D_cl = None
-
 
         # Is turned off by default
         if cl_reg:
@@ -956,8 +953,8 @@ class StylEx(nn.Module):
         set_requires_grad(self.GE, False)
 
         # init optimizers
-        generator_params = list(self.G.parameters()) + list(self.S.parameters()) 
-        self.G_opt = Adam([{'params' : generator_params}, {'params' :  list(self.encoder.parameters()), 'lr': 1e-5}], lr=self.lr, betas=(0.5, 0.9))
+        generator_params = list(self.G.parameters()) + list(self.S.parameters()) + list(self.encoder.parameters())
+        self.G_opt = Adam(generator_params, lr=self.lr, betas=(0.5, 0.9))
         self.D_opt = Adam(self.D.parameters(), lr=self.lr * ttur_mult, betas=(0.5, 0.9))
 
         # init weights
@@ -1047,15 +1044,14 @@ class Trainer():
             log=False,
             kl_scaling=1,
             rec_scaling=10,
-            classifier_path="mnist.pth", #TODO: Used to be FFHQ-Gender.pth,
+            classifier_path="mnist.pth",  # TODO: Used to be FFHQ-Gender.pth,
             num_classes=2,  # TODO: Used to be 2 for faces gender.
             encoder_class=None,
-            kl_rec_during_disc=False,
             alternating_training=True,
             sample_from_encoder=False,
             dataset_name=None,
             tensorboard_dir=None,
-            
+
             *args,
             **kwargs
     ):
@@ -1065,9 +1061,7 @@ class Trainer():
         self.kl_scaling = kl_scaling
         self.rec_scaling = rec_scaling
 
-        self.kl_rec_during_disc = kl_rec_during_disc
-        
-        self.alternating_training=alternating_training
+        self.alternating_training = alternating_training
 
         self.name = name
 
@@ -1156,19 +1150,13 @@ class Trainer():
 
         # Load classifier
         self.num_classes = num_classes
-        self.classifier = MobileNet(classifier_path, cuda_rank=rank, output_size=self.num_classes, image_size=64)  # Automatically put into eval mode
+        self.classifier = MobileNet(classifier_path, cuda_rank=rank, output_size=self.num_classes,
+                                    image_size=64)  # Automatically put into eval mode
 
         # Load tensorboard, create writer
         self.tb_writer = None
         if exists(tensorboard_dir):
             self.tb_writer = SummaryWriter(tensorboard_dir)
-
-
-        # Load tensorboard, create writer
-        self.tb_writer = None
-        if exists(tensorboard_dir):
-            self.tb_writer = SummaryWriter(tensorboard_dir)
-
 
     @property
     def image_extension(self):
@@ -1214,7 +1202,7 @@ class Trainer():
         self.attn_layers = config.pop('attn_layers', [])
         self.no_const = config.pop('no_const', False)
         self.lr_mlp = config.pop('lr_mlp', 0.1)
-        del self.StylEx 
+        del self.StylEx
         self.init_StylEx()
 
     def config(self):
@@ -1222,26 +1210,20 @@ class Trainer():
                 'transparent': self.transparent, 'fq_layers': self.fq_layers, 'fq_dict_size': self.fq_dict_size,
                 'attn_layers': self.attn_layers, 'no_const': self.no_const}
 
-
-    
-
     def set_data_src(self, folder='./', dataset_name=None):
-        print(dataset_name)
         if dataset_name is None:
-            self.dataset = Dataset(folder, self.image_size, transparent=self.transparent, aug_prob=self.dataset_aug_prob)
+            self.dataset = Dataset(folder, self.image_size, transparent=self.transparent,
+                                   aug_prob=self.dataset_aug_prob)
             num_workers = num_workers = default(self.num_workers, NUM_CORES if not self.is_ddp else 0)
 
             sampler = DistributedSampler(self.dataset, rank=self.rank, num_replicas=self.world_size,
-                                            shuffle=True) if self.is_ddp else None
+                                         shuffle=True) if self.is_ddp else None
 
-        
             dataloader = data.DataLoader(self.dataset, num_workers=num_workers,
-                                        batch_size=math.ceil(self.batch_size / self.world_size), sampler=sampler,
-                                        shuffle=not self.is_ddp, drop_last=True, pin_memory=True)
-
+                                         batch_size=math.ceil(self.batch_size / self.world_size), sampler=sampler,
+                                         shuffle=not self.is_ddp, drop_last=True, pin_memory=True)
 
         if dataset_name == 'MNIST':
-
             self.dataset = MNIST_1vA(digit=8)
 
             weights = make_weights_for_balanced_classes(self.dataset.dataset, self.num_classes)
@@ -1249,8 +1231,6 @@ class Trainer():
 
             dataloader = data.DataLoader(self.dataset, batch_size=self.batch_size, sampler=sampler)
 
-
-                            
         self.loader = cycle(dataloader)
 
         # auto set augmentation prob for user if dataset is detected to be low
@@ -1261,7 +1241,6 @@ class Trainer():
 
     def train(self):
         assert exists(self.loader), 'You must first initialize the data source with `.set_data_src(<folder of images>)`'
-
 
         if not exists(self.StylEx):
             self.init_StylEx()
@@ -1305,10 +1284,6 @@ class Trainer():
             G_loss_fn = dual_contrastive_loss
             G_requires_reals = True
 
-        
-
-
-
         # train discriminator
 
         avg_pl_length = self.pl_mean
@@ -1316,36 +1291,24 @@ class Trainer():
 
         if self.alternating_training:
             encoder_input = False
-            # multiply losses by 2 since they are only calculated every other iteration if using alternating training
-            self.rec_scaling *= 2
-            self.kl_scaling *= 2
-        else:
-            encoder_input = True
-
 
         for i in gradient_accumulate_contexts(self.gradient_accumulate_every, self.is_ddp, ddps=[D_aug, S, G]):
             discriminator_batch = next(self.loader).cuda(self.rank)
             discriminator_batch.requires_grad_()
 
             if not self.alternating_training or encoder_input:
-
-                
-                self.StylEx.encoder.zero_grad()
-
                 encoder_batch = next(self.loader).cuda(self.rank)
                 encoder_batch.requires_grad_()
 
-                encoder_output = self.StylEx.encoder(encoder_batch)[0]
+                encoder_output = self.StylEx.encoder(encoder_batch)
                 real_classified_logits = self.classifier.classify_images(encoder_batch)
-
-                #print(real_classified_logits[:,0] > real_classified_logits[:,1])
-
                 style = [(torch.cat((encoder_output, real_classified_logits), dim=1),
-                        self.StylEx.G.num_layers)]  # Has to be bracketed because expects a noise mix
+                          self.StylEx.G.num_layers)]  # Has to be bracketed because expects a noise mix
                 noise = image_noise(batch_size, image_size, device=self.rank)
 
-
                 w_styles = styles_def_to_tensor(style)
+
+                encoder_input = False
             else:
                 get_latents_fn = mixed_list if random() < self.mixed_prob else noise_list
                 style = get_latents_fn(batch_size, num_layers, latent_dim, device=self.rank)
@@ -1354,13 +1317,13 @@ class Trainer():
                 w_space = latent_to_w(S, style)
                 w_styles = styles_def_to_tensor(w_space)
 
-        
+                if self.alternating_training:
+                    encoder_input = True
+
             generated_images = G(w_styles, noise)
             fake_output, fake_q_loss = D_aug(generated_images.clone().detach(), detach=True, **aug_kwargs)
 
             real_output, real_q_loss = D_aug(discriminator_batch, **aug_kwargs)
-
-
 
             real_output_loss = real_output
             fake_output_loss = fake_output
@@ -1371,7 +1334,6 @@ class Trainer():
 
             divergence = D_loss_fn(real_output_loss, fake_output_loss)
             disc_loss = divergence
-
 
             if self.has_fq:
                 quantize_loss = (fake_q_loss + real_q_loss).mean()
@@ -1386,29 +1348,6 @@ class Trainer():
                 disc_loss = disc_loss + gp
 
             disc_loss = disc_loss / self.gradient_accumulate_every
-
-            if self.alternating_training and encoder_input:
-                if self.kl_rec_during_disc:
-                    generated_images_w = self.StylEx.encoder(generated_images)[0]
-                    rec_loss = self.rec_scaling * reconstruction_loss(encoder_batch, generated_images, generated_images_w, encoder_output) / self.gradient_accumulate_every
-                    
-                    
-                    gen_image_classified_logits = self.classifier.classify_images(generated_images)
-
-                    kl_loss = self.kl_scaling * classifier_kl_loss(real_classified_logits, gen_image_classified_logits)  / self.gradient_accumulate_every
-                    #rec_loss = rec_loss / self.ttur_scaling
-
-                    backwards(rec_loss, self.StylEx.G_opt, loss_id=3)
-                    total_rec_loss += rec_loss.detach().item() #/ self.gradient_accumulate_every
-
-                    backwards(kl_loss, self.StylEx.G_opt, loss_id=4)
-
-                    total_kl_loss += kl_loss.detach().item() #/ self.gradient_accumulate_every
-
-                encoder_input = False
-            elif self.alternating_training:
-                encoder_input = True
-
             disc_loss.register_hook(raise_if_nan)
             backwards(disc_loss, self.StylEx.D_opt, loss_id=1)
 
@@ -1424,8 +1363,6 @@ class Trainer():
         if self.alternating_training:
             encoder_input = False
 
-
-
         self.StylEx.G_opt.zero_grad()
 
         for i in gradient_accumulate_contexts(self.gradient_accumulate_every, self.is_ddp, ddps=[S, G, D_aug]):
@@ -1433,9 +1370,8 @@ class Trainer():
 
             image_batch.requires_grad_()
 
-
             if not self.alternating_training or encoder_input:
-                encoder_output = self.StylEx.encoder(image_batch)[0]
+                encoder_output = self.StylEx.encoder(image_batch)
                 real_classified_logits = self.classifier.classify_images(image_batch)
 
                 style = [(torch.cat((encoder_output, real_classified_logits), dim=1), self.StylEx.G.num_layers)]
@@ -1448,7 +1384,6 @@ class Trainer():
 
                 w_space = latent_to_w(S, style)
                 w_styles = styles_def_to_tensor(w_space)
-
 
             generated_images = G(w_styles, noise)
             gen_image_classified_logits = self.classifier.classify_images(generated_images)
@@ -1472,10 +1407,12 @@ class Trainer():
 
             # Our losses
             if not self.alternating_training or encoder_input:
-                rec_loss = self.rec_scaling * reconstruction_loss(image_batch, generated_images, self.StylEx.encoder(generated_images)[0], encoder_output) / self.gradient_accumulate_every
-                kl_loss =  self.kl_scaling * classifier_kl_loss(real_classified_logits, gen_image_classified_logits)  / self.gradient_accumulate_every
-
-
+                # multiply losses by 2 since they are only calculated every other iteration if using alternating training
+                rec_loss = 2 * self.rec_scaling * reconstruction_loss(image_batch, generated_images,
+                                                                      self.StylEx.encoder(generated_images),
+                                                                      encoder_output) / self.gradient_accumulate_every
+                kl_loss = 2 * self.kl_scaling * classifier_kl_loss(real_classified_logits,
+                                                                   gen_image_classified_logits) / self.gradient_accumulate_every
 
             # Original loss
             loss = G_loss_fn(fake_output_loss, real_output)
@@ -1493,17 +1430,16 @@ class Trainer():
             gen_loss = gen_loss / self.gradient_accumulate_every
             gen_loss.register_hook(raise_if_nan)
 
-
             if not self.alternating_training or encoder_input:
-                
+
                 backwards(gen_loss, self.StylEx.G_opt, loss_id=2, retain_graph=True)
                 backwards(rec_loss, self.StylEx.G_opt, loss_id=3, retain_graph=True)
                 backwards(kl_loss, self.StylEx.G_opt, loss_id=4)
 
                 total_gen_loss += loss.detach().item() / self.gradient_accumulate_every
-                total_rec_loss += rec_loss.detach().item() 
-                total_kl_loss += kl_loss.detach().item() 
-   
+                total_rec_loss += rec_loss.detach().item()
+                total_kl_loss += kl_loss.detach().item()
+
                 self.g_loss = float(total_gen_loss)
                 self.total_rec_loss = float(total_rec_loss)
                 self.total_kl_loss = float(total_kl_loss)
@@ -1515,13 +1451,6 @@ class Trainer():
                 self.g_loss = float(total_gen_loss)
 
             encoder_input = not encoder_input
-        
-        # If writer exists, write losses
-        if exists(self.tb_writer):
-            self.tb_writer.add_scalar('loss/G', self.g_loss, self.steps)
-            self.tb_writer.add_scalar('loss/D', self.d_loss, self.steps)
-            self.tb_writer.add_scalar('loss/rec', self.total_rec_loss, self.steps)
-            self.tb_writer.add_scalar('loss/kl', self.total_kl_loss, self.steps)
 
         # If writer exists, write losses
         if exists(self.tb_writer):
@@ -1586,7 +1515,6 @@ class Trainer():
         image_size = self.StylEx.G.image_size
         num_layers = self.StylEx.G.num_layers
 
-
         # latents and noise
 
         latents = noise_list(num_rows ** 2, num_layers, latent_dim, device=self.rank)
@@ -1602,22 +1530,26 @@ class Trainer():
 
             with torch.no_grad():
                 real_classified_logits = self.classifier.classify_images(image_batch)
-                w = [(torch.cat((self.StylEx.encoder(image_batch)[0], real_classified_logits), dim=1), num_layers)]
+                w = [(torch.cat((self.StylEx.encoder(image_batch), real_classified_logits), dim=1), num_layers)]
             num_rows = len(image_batch)
         else:
             w = None
 
         # pass images here
 
-        generated_images = self.generate_truncated(self.StylEx.S, self.StylEx.G, latents, n, w=w, trunc_psi=self.trunc_psi)
-        torchvision.utils.save_image(torch.cat((image_batch, generated_images)), str(self.results_dir / self.name / f'{str(num)}-{from_encoder_string}.{ext}'),
-                                    nrow=num_rows)
+        generated_images = self.generate_truncated(self.StylEx.S, self.StylEx.G, latents, n, w=w,
+                                                   trunc_psi=self.trunc_psi)
+        torchvision.utils.save_image(torch.cat((image_batch, generated_images)),
+                                     str(self.results_dir / self.name / f'{str(num)}-{from_encoder_string}.{ext}'),
+                                     nrow=num_rows)
 
         # moving averages
 
-        generated_images = self.generate_truncated(self.StylEx.SE, self.StylEx.GE, latents, n, w=w, trunc_psi=self.trunc_psi)
-        torchvision.utils.save_image(torch.cat((image_batch, generated_images)), str(self.results_dir / self.name / f'{str(num)}-{from_encoder_string}-ema.{ext}'),
-                                    nrow=num_rows)
+        generated_images = self.generate_truncated(self.StylEx.SE, self.StylEx.GE, latents, n, w=w,
+                                                   trunc_psi=self.trunc_psi)
+        torchvision.utils.save_image(torch.cat((image_batch, generated_images)),
+                                     str(self.results_dir / self.name / f'{str(num)}-{from_encoder_string}-ema.{ext}'),
+                                     nrow=num_rows)
 
         # mixing regularities
 
@@ -1637,8 +1569,10 @@ class Trainer():
         tt = int(num_layers / 2)
         mixed_latents = [(tmp1, tt), (tmp2, num_layers - tt)]
 
-        generated_images = self.generate_truncated(self.StylEx.SE, self.StylEx.GE, mixed_latents, n, trunc_psi=self.trunc_psi)
-        torchvision.utils.save_image(torch.cat((image_batch, generated_images)), str(self.results_dir / self.name / f'{str(num)}-{from_encoder_string}-mr.{ext}'),
+        generated_images = self.generate_truncated(self.StylEx.SE, self.StylEx.GE, mixed_latents, n,
+                                                   trunc_psi=self.trunc_psi)
+        torchvision.utils.save_image(torch.cat((image_batch, generated_images)),
+                                     str(self.results_dir / self.name / f'{str(num)}-{from_encoder_string}-mr.{ext}'),
                                      nrow=num_rows)
 
     @torch.no_grad()
@@ -1744,7 +1678,8 @@ class Trainer():
         for ratio in tqdm(ratios):
             interp_latents = slerp(ratio, latents_low, latents_high)
             latents = [(interp_latents, num_layers)]
-            generated_images = self.generate_truncated(self.StylEx.SE, self.StylEx.GE, latents, n, trunc_psi=self.trunc_psi)
+            generated_images = self.generate_truncated(self.StylEx.SE, self.StylEx.GE, latents, n,
+                                                       trunc_psi=self.trunc_psi)
             images_grid = torchvision.utils.make_grid(generated_images, nrow=num_rows)
             pil_image = transforms.ToPILImage()(images_grid.cpu())
 
