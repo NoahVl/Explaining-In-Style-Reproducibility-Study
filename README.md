@@ -28,14 +28,18 @@ If you want to train a StylEx model on a new dataset we suggest you first train 
 
 If you want to use a new classifier architecture you should add support for this in one of the `stylex_train` files.
 
-### Train the classifier
+### Training one of the supported classifiers
 Two options, Mobilenet or ResNet, ResNet seemed to give better results on small images upscaled to 244px (?) than Mobilenet.
 
+
 ### Train the StylEx model (Encoder and GAN)
-Run the cli.py file with your desired parameters.
+Run the `cli.py` file with your desired parameters. As explained before, you have two options for the `stylex_train` file, the normal `stylex_train` has the old architecture, without softaxing and providing the softmaxed classifications to the discriminator. The `stylex_train_new.py` file does include this. However from our limited testing the first version seemed to work better, your mileage may vary. If you want to use the new script, please change the import in the `cli.py` file by setting the `USE_OLD_ARCHITECTURE` to `False`.
 
 Explain parameters here.
 
+
+## User study
+The files of the user study, which has been discussed in the paper, have been included in this repository in the `/all_user_studies` folder.
 
 ## License
 MIT.
