@@ -98,7 +98,7 @@ def get_train_valid_test_dataset(path='./plant-village', image_size=64, train=0.
 
 
 
-  dataset = ImageFolder('./plant-village', transform=transforms)
+  dataset = ImageFolder(path, transform=transforms)
 
   train_cnt = round(train * len(dataset))
   valid_cnt = round(valid * len(dataset))
