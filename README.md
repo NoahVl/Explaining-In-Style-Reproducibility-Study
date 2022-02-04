@@ -15,14 +15,14 @@ Running this notebook requires a CUDA-enabled graphics card. Installing the envi
 1. Create the conda environment from the .yml file.
 2. Activate the environment.
 3. Open jupyter notebook.
-4. Select `model_name` to pick the dataset/model on which to show results. Default is 'plant'.
+4. Select `model_to_choose` to pick the dataset/model on which to show results. Default is 'plant'.
 5. Run the `all_results_notebook.ipynb` notebook! 
 
 ## Verifying results
 
 ### Using precomputed attfind values (hdf5 files)
 
-The `all_results_notebook.ipynb` works with pre-calculated latent vectors to generate results and run the experiments. If you want to run the AttFind procedure yourself, make use of the `run_attfind_combined.ipynb` notebook (similarly, select the appropriate `model_name`). 
+The `all_results_notebook.ipynb` works with pre-calculated latent vectors to generate results and run the experiments. If you want to run the AttFind procedure yourself, make use of the `run_attfind_combined.ipynb` notebook (similarly, select the appropriate `model_to_choose`). 
 
 Warning: The AttFind procedure is quite slow and may take over an hour depending on your hardware.
 
