@@ -1,4 +1,4 @@
-name: dl2021
+name: stylex
 channels:
   - pytorch
   - pyg
