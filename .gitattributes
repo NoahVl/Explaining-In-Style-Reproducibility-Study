@@ -2,3 +2,4 @@ stylex/trained_classifier/*.pt filter=lfs diff=lfs merge=lfs -text
 stylex/models/new_faces_gender_resnet/*.pt filter=lfs diff=lfs merge=lfs -text
 stylex/models/old_faces_gender_mobilenet/*.pt filter=lfs diff=lfs merge=lfs -text
 stylex/models/old_plant_mobilenet/*.pt filter=lfs diff=lfs merge=lfs -text
+stylex/precomputed_attfind_files/*.hdf5 filter=lfs diff=lfs merge=lfs -text
