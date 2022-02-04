@@ -12,7 +12,7 @@ Running this notebook requires a CUDA-enabled graphics card. Installing the envi
 
 ## Instructions
 
-1. Create the conda environment from the .yaml file.
+1. Create the conda environment from the .yml file.
 2. Activate the environment.
 3. Open jupyter notebook.
 4. Select `model_name` to pick the dataset/model on which to show results. Default is 'plant'.
