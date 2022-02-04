@@ -1,4 +1,4 @@
-# Reproducibility Study: Explaining in Style: Training a GAN to explain a classifier in StyleSpace
+# [Re] Explaining in Style: Training a GAN to explain a classifier in StyleSpace
 
 <h1 align="center">
 <img src="all_user_studies\user_study_images_old_faces\study_1\class_study_0.gif" alt="GIF of user-study" align="right"  width="200" height="200"</img>
