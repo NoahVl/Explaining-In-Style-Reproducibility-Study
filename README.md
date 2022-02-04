@@ -8,18 +8,23 @@ ReStylEx
 </h1>
 
 ## Requirements
-Install conda yml file.
+Running this notebook requires a CUDA-enabled graphics card. Installing the environment requires Conda.
 
-## Difference between two stylex_train files
-Explain.
+## Instructions
+
+1. Create the conda environment from the .yaml file.
+2. Activate the environment.
+3. Open jupyter notebook.
+4. Select `model_name` to pick the dataset/model on which to show results. Default is 'plant'.
+5. Run the `all_results_notebook.ipynb` notebook! 
 
 ## Verifying results
 
 ### Using precomputed attfind values (hdf5 files)
-Please check out notebook ...
 
-### Producing the attfind values yourself
-Please check out notebook ...
+The `all_results_notebook.ipynb` works with pre-calculated latent vectors to generate results and run the experiments. If you want to run the AttFind procedure yourself, make use of the `run_attfind_combined.ipynb` notebook (similarly, select the appropriate `model_name`). 
+
+Warning: The AttFind procedure is quite slow and may take over an hour depending on your hardware.
 
 ## How to train the models?
 The StylEx framework consists of two parts, the "pretrained" classifier and the Encoder+GAN.
@@ -29,14 +34,7 @@ If you want to train a StylEx model on a new dataset we suggest you first train 
 If you want to use a new classifier architecture you should add support for this in one of the `stylex_train` files.
 
 ### Training one of the supported classifiers
-Two options, Mobilenet or ResNet, ResNet seemed to give better results on small images upscaled to 244px (?) than Mobilenet.
-
-
-### Train the StylEx model (Encoder and GAN)
-Run the `cli.py` file with your desired parameters. As explained before, you have two options for the `stylex_train` file, the normal `stylex_train` has the old architecture, without softaxing and providing the softmaxed classifications to the discriminator. The `stylex_train_new.py` file does include this. However from our limited testing the first version seemed to work better, your mileage may vary. If you want to use the new script, please change the import in the `cli.py` file by setting the `USE_OLD_ARCHITECTURE` to `False`.
-
-Explain parameters here.
-
+Two options, Mobilenet or ResNet, ResNet seemed to give better results on small images upscaled to 224px than Mobilenet.
 
 ## User study
 The files of the user study, which has been discussed in the paper, have been included in this repository in the `/all_user_studies` folder.

@@ -1,1 +1,0 @@
-{"image_size": 64, "network_capacity": 16, "lr_mlp": 0.1, "transparent": false, "fq_layers": [], "fq_dict_size": 256, "attn_layers": [], "no_const": false}
