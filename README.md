@@ -21,7 +21,7 @@ Running this notebook requires a CUDA-enabled graphics card. Installing the envi
 
 ## Verifying results
 
-The `all_results_notebook.ipynb` works with pre-calculated latent vectors to generate results and run the experiments. If you want to run the AttFind procedure yourself, make use of the `run_attfind_combined.ipynb` notebook (similarly, select the appropriate `model_to_choose`). Note that you will have to download the datasets if you want to run AttFind (you can make use of the notebooks in the data folder).
+The `all_results_notebook.ipynb` works with pre-calculated latent vectors to generate results and run the experiments. If you want to generate the latent embeddings yourself, make use of the `run_attfind_combined.ipynb` notebook (similarly, select the appropriate `model_to_choose`). Note that you will have to download the datasets if you want to run AttFind (you can make use of the notebooks in the data folder).
 
 Warning: The AttFind procedure is quite slow and may take over an hour depending on your hardware.
 
