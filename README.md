@@ -1,11 +1,12 @@
-# FACT: Explaining in Style - Reproducibility Study
+# [Re] Explaining in Style: Training a GAN to explain a classifier in StyleSpace
 
 <h1 align="center">
-<img src="all_user_studies\user_study_images_old_faces\study_1\class_study_0.gif" alt="GIF of user-study" width="400" height="400"</img>
-<br>
-ReStylEx
-<br>
+<img src="all_user_studies\user_study_images_old_faces\study_1\class_study_0.gif" alt="GIF of user-study" align="right"  width="200" height="200"</img>
 </h1>
+
+[![MIT License](https://img.shields.io/badge/License-MIT-green.svg)](/LICENSE)
+[![Documentation](https://img.shields.io/badge/docs-master-green.svg)](./docs)
+
 
 ## Requirements
 Running this notebook requires a CUDA-enabled graphics card. Installing the environment requires Conda.
@@ -15,21 +16,19 @@ Running this notebook requires a CUDA-enabled graphics card. Installing the envi
 1. Create the conda environment from the .yml file.
 2. Activate the environment.
 3. Open jupyter notebook.
-4. Select `model_name` to pick the dataset/model on which to show results. Default is 'plant'.
+4. Select `model_to_choose` to pick the dataset/model on which to show results. Default is 'plant'.
 5. Run the `all_results_notebook.ipynb` notebook! 
 
 ## Verifying results
 
-### Using precomputed attfind values (hdf5 files)
-
-The `all_results_notebook.ipynb` works with pre-calculated latent vectors to generate results and run the experiments. If you want to run the AttFind procedure yourself, make use of the `run_attfind_combined.ipynb` notebook (similarly, select the appropriate `model_name`). 
+The `all_results_notebook.ipynb` works with pre-calculated latent vectors to generate results and run the experiments. If you want to generate the latent embeddings yourself, make use of the `run_attfind_combined.ipynb` notebook (similarly, select the appropriate `model_to_choose`). Note that you will have to download the datasets if you want to run AttFind (you can make use of the notebooks in the data folder).
 
 Warning: The AttFind procedure is quite slow and may take over an hour depending on your hardware.
 
 ## How to train the models?
 The StylEx framework consists of two parts, the "pretrained" classifier and the Encoder+GAN.
 
-If you want to train a StylEx model on a new dataset we suggest you first train a new classifier and then provide it to the `cli.py` file to train the StylEx model on this dataset with the new classifier in evaluation mode. If you use a Resnet/Mobilenet model you should only have to change the classifier_name parameter in the `cli.py` file, or change it as a parameter using `--classifier_name <mobilenet/resnet>` when you call the `cli.py` file.
+If you want to train a StylEx model on a new dataset we suggest you first train a new classifier and then provide it to the `cli.py` file to train the StylEx model on this dataset with the new classifier in evaluation mode. If you use a Resnet/Mobilenet model you should only have to change the classifier_name parameter in the `cli.py` file, or change it as a parameter using `--classifier_name <mobilenet/resnet>` when you call the `cli.py` file. 
 
 If you want to use a new classifier architecture you should add support for this in one of the `stylex_train` files.
 
