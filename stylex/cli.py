@@ -82,18 +82,18 @@ def run_training(rank, world_size, model_args, data, load_from, new, num_train_s
 
 
 def train_from_folder(
-        data='../data',  # Used to be data TODO: change back
+        data='../data/Kaggle_FFHQ_Resized_256px/flickrfaceshq-dataset-nvidia-resized-256px/resized',
         results_dir='./results',
         models_dir='./models',
-        name='Faces-Resnet-ResizeFix64',  # Used to be 'default' (FFHQ) on my pc TODO: change back
+        name='Faces-Resnet-64',  # Name of the experiment.
         new=False,
         load_from=-1,
         image_size=64,
-        network_capacity=16,
-        fmap_max=512,  # 512
+        network_capacity=16,  # 16
+        fmap_max=512,
         transparent=False,
         batch_size=4,
-        gradient_accumulate_every=4,
+        gradient_accumulate_every=8,
         num_train_steps=150000,
         learning_rate=2e-4,
         lr_mlp=0.1,
@@ -132,24 +132,22 @@ def train_from_folder(
         log=False,
 
         # A global scale to the custom losses
-        # TODO: Check if changing encoder learning rate is more appropriate
-        #       than rescaling the reconstruction loss
         kl_scaling=1,
         rec_scaling=1,
 
         # Classifier name <MobileNet or ResNet> (non case sensitive)
-        classifier_name="ResNet",
+        classifier_name="resnet",
 
         # Path to the classifier
-        classifier_path="resnet-18-64px-unfreezel4.pt",
+        classifier_path="mobilenet-64px-gender.pth",
 
         # This shouldn't ever be changed since we're working with
-        # binary classificiation.
-        num_classes=2,  # TODO: Is 2 for faces gender.
+        # binary classification.
+        num_classes=2,
 
-        # If unspecified, use the Discriminator as an encoder.
+        # If unspecified, use the Discriminator as an encoder (like the authors did).
         # This is the way to go if we want to be close to the original paper.
-        # Check out debug_endocers.py for the names of classes if you still want
+        # Check out debug_encoders.py for the names of classes if you still want
         # to use a different encoder.
         encoder_class=None,
 
@@ -158,12 +156,12 @@ def train_from_folder(
         # This is for making the image results be results of the
         # image -> encoder -> generator pipeline
         # Set False if training a standard GAN or if you want to see
-        # examples from a noise vector
+        # examples from a noise vector.
         sample_from_encoder=True,
 
         # Alternatively trains the model with the StylEx loss
         # and the regular StyleGAN loss. If False just trains
-        # using the encoder
+        # using the encoder.
         alternating_training=True,
 
         # If dataset_name='MNIST' automatically loads and rebalances a 1 vs all MNIST dataset.

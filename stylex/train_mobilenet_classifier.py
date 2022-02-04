@@ -11,7 +11,6 @@ from torch.utils.data import DataLoader
 
 # Dataset utils
 from data.Kaggle_FFHQ_Resized_256px import ffhq_utils
-from data.MNIST import mnist_util
 
 def set_seed(seed):
     """
@@ -251,8 +250,6 @@ def main(args: argparse.Namespace):
     if args.dataset == "FFHQ-Aging":
         train_dataset, valid_dataset, test_dataset = ffhq_utils.get_train_valid_test_dataset(
             "data/Kaggle_FFHQ_Resized_256px", "gender")
-    elif args.dataset == "MNIST":
-        train_dataset, valid_dataset, test_dataset = mnist_util.mnist_train_valid_test_dataset("data/MNIST/data", target=8)
     else:
         raise NotImplementedError
 

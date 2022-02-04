@@ -166,8 +166,12 @@ flickrfaceshq-dataset-nvidia-resized-256px/
 
 # Vscode
 *.vscode/
-/data/CelebA/celeba-dataset/
 
 # Due to licensing, don't include fonts
 /stylex/Roboto-Bold.ttf
+
+# Don't include downloaded data
 /data/plant_vilage/plant_data/
+/data/CelebA/celeba-dataset/
+/stylex/fid_images/
+/stylex/user_study_images/

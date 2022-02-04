@@ -4,7 +4,7 @@ import math
 import fire
 import json
 
-#import lpips  TODO: Change back
+import lpips
 from torch.utils.tensorboard import SummaryWriter
 
 from tqdm import tqdm
@@ -52,6 +52,7 @@ assert torch.cuda.is_available(), 'You need to have an Nvidia GPU with CUDA inst
 
 # Classifier
 from mobilenet_classifier import MobileNet
+from resnet_classifier import ResNet
 
 # Encoders for debugging or additional testing
 import debug_encoders
@@ -400,7 +401,7 @@ def dual_contrastive_loss(real_logits, fake_logits):
 
 
 # Our losses
-#lpips_loss = lpips.LPIPS(net="alex").cuda(0)  # image should be RGB, IMPORTANT: normalized to [-1,1]  #TODO: Change back
+lpips_loss = lpips.LPIPS(net="alex").cuda(0)  # image should be RGB, IMPORTANT: normalized to [-1,1]
 l1_loss = nn.L1Loss()
 kl_loss = nn.KLDivLoss(reduction="batchmean", log_target=True)
 
@@ -911,7 +912,7 @@ class DiscriminatorE(nn.Module):
 class StylEx(nn.Module):
     def __init__(self, image_size, latent_dim=514, fmap_max=512, style_depth=8, network_capacity=16, transparent=False,
                  fp16=False, cl_reg=False, steps=1, lr=1e-4, ttur_mult=2, fq_layers=[], fq_dict_size=256,
-                 attn_layers=[], no_const=False, lr_mlp=0.1, rank=0, classifier_labels=2, encoder_class=None):
+                 attn_layers=[], no_const=False, lr_mlp=0.1, rank=0, classifier_labels=2, encoder_class=None, kl_rec_during_disc=False):
         super().__init__()
         self.lr = lr
         self.steps = steps
@@ -1051,6 +1052,7 @@ class Trainer():
             sample_from_encoder=False,
             dataset_name=None,
             tensorboard_dir=None,
+            classifier_name=None,
 
             *args,
             **kwargs
@@ -1150,13 +1152,18 @@ class Trainer():
 
         # Load classifier
         self.num_classes = num_classes
-        self.classifier = MobileNet(classifier_path, cuda_rank=rank, output_size=self.num_classes,
-                                    image_size=64)  # Automatically put into eval mode
+        self.classifier = None
+        if classifier_name.lower() == "resnet":
+            self.classifier = ResNet(classifier_path, cuda_rank=rank, output_size=self.num_classes,
+                                     image_size=image_size)
+        else:
+            self.classifier = MobileNet(classifier_path, cuda_rank=rank, output_size=self.num_classes,
+                                        image_size=image_size)  # Automatically put into eval mode
 
         # Load tensorboard, create writer
         self.tb_writer = None
         if exists(tensorboard_dir):
-            self.tb_writer = SummaryWriter(tensorboard_dir)
+            self.tb_writer = SummaryWriter(os.path.join(tensorboard_dir, name))
 
     @property
     def image_extension(self):
@@ -1321,9 +1328,9 @@ class Trainer():
                     encoder_input = True
 
             generated_images = G(w_styles, noise)
-            fake_output, fake_q_loss = D_aug(generated_images.clone().detach(), detach=True, **aug_kwargs)
+            fake_output = D_aug(generated_images.clone().detach(), detach=True, **aug_kwargs)
 
-            real_output, real_q_loss = D_aug(discriminator_batch, **aug_kwargs)
+            real_output = D_aug(discriminator_batch, **aug_kwargs)
 
             real_output_loss = real_output
             fake_output_loss = fake_output
@@ -1334,12 +1341,6 @@ class Trainer():
 
             divergence = D_loss_fn(real_output_loss, fake_output_loss)
             disc_loss = divergence
-
-            if self.has_fq:
-                quantize_loss = (fake_q_loss + real_q_loss).mean()
-                self.q_loss = float(quantize_loss.detach().item())
-
-                disc_loss = disc_loss + quantize_loss
 
             if apply_gradient_penalty:
                 gp = gradient_penalty(discriminator_batch, real_output)
@@ -1388,7 +1389,7 @@ class Trainer():
             generated_images = G(w_styles, noise)
             gen_image_classified_logits = self.classifier.classify_images(generated_images)
 
-            fake_output, _ = D_aug(generated_images, **aug_kwargs)
+            fake_output = D_aug(generated_images, **aug_kwargs)
             fake_output_loss = fake_output
 
             real_output = None

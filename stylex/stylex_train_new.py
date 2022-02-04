@@ -4,7 +4,7 @@ import math
 import fire
 import json
 
-# import lpips  #TODO: Put back
+import lpips
 from torch.utils.tensorboard import SummaryWriter
 
 from tqdm import tqdm
@@ -400,8 +400,8 @@ def dual_contrastive_loss(real_logits, fake_logits):
     return loss_half(real_logits, fake_logits) + loss_half(-fake_logits, -real_logits)
 
 
-# Our losses TODO: Put back
-#lpips_loss = lpips.LPIPS(net="alex").cuda(0)  # image should be RGB, IMPORTANT: normalized to [-1,1]
+# Our losses
+lpips_loss = lpips.LPIPS(net="alex").cuda(0)  # image should be RGB, IMPORTANT: normalized to [-1,1]
 l1_loss = nn.L1Loss()
 kl_loss = nn.KLDivLoss(reduction="batchmean", log_target=True)
 
