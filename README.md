@@ -1,11 +1,12 @@
-# FACT: Explaining in Style - Reproducibility Study
+# Reproducibility Study: Explaining in Style: Training a GAN to explain a classifier in StyleSpace
 
 <h1 align="center">
-<img src="all_user_studies\user_study_images_old_faces\study_1\class_study_0.gif" alt="GIF of user-study" width="400" height="400"</img>
-<br>
-ReStylEx
-<br>
+<img src="all_user_studies\user_study_images_old_faces\study_1\class_study_0.gif" alt="GIF of user-study" align="right"  width="200" height="200"</img>
 </h1>
+
+[![MIT License](https://img.shields.io/badge/License-MIT-green.svg)](/LICENSE)
+[![Documentation](https://img.shields.io/badge/docs-master-green.svg)](./docs)
+
 
 ## Requirements
 Running this notebook requires a CUDA-enabled graphics card. Installing the environment requires Conda.
