@@ -139,7 +139,7 @@ def train_from_folder(
         classifier_name="resnet",
 
         # Path to the classifier
-        classifier_path="mobilenet-64px-gender.pth",
+        classifier_path="resnet-18-64px-gender.pt",
 
         # This shouldn't ever be changed since we're working with
         # binary classification.

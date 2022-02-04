@@ -54,9 +54,6 @@ assert torch.cuda.is_available(), 'You need to have an Nvidia GPU with CUDA inst
 from mobilenet_classifier import MobileNet
 from resnet_classifier import ResNet
 
-# Encoders for debugging or additional testing
-import debug_encoders
-
 # constants
 
 NUM_CORES = multiprocessing.cpu_count()
@@ -932,7 +929,7 @@ class StylEx(nn.Module):
                                           fq_dict_size=fq_dict_size,
                                           attn_layers=attn_layers, transparent=transparent, fmap_max=fmap_max)
         else:
-            self.encoder = debug_encoders.encoder_dict[encoder_class]
+            raise NotImplementedError("Please create your own encoder.")
 
         # Fixed
         self.num_classes = 2
