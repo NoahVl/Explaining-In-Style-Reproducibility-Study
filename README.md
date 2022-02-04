@@ -1,5 +1,7 @@
 # [Re] Explaining in Style: Training a GAN to explain a classifier in StyleSpace
 
+This repository is a re-implementation of [Explaining in Style: Training a GAN to explain a classifier in StyleSpace](https://openaccess.thecvf.com/content/ICCV2021/papers/Lang_Explaining_in_Style_Training_a_GAN_To_Explain_a_Classifier_ICCV_2021_paper.pdf) by Lang et al. (2021).
+
 <h1 align="center">
 <img src="all_user_studies\user_study_images_old_faces\study_1\class_study_0.gif" alt="GIF of user-study" align="right"  width="200" height="200"</img>
 </h1>
@@ -23,7 +25,7 @@ Running this notebook requires a CUDA-enabled graphics card. Installing the envi
 
 The `all_results_notebook.ipynb` works with pre-calculated latent vectors to generate results and run the experiments. If you want to generate the latent embeddings yourself, make use of the `run_attfind_combined.ipynb` notebook (similarly, select the appropriate `model_to_choose`). Note that you will have to download the datasets if you want to run AttFind (you can make use of the notebooks in the data folder).
 
-Warning: The AttFind procedure is quite slow and may take over an hour depending on your hardware.
+**Warning**: The AttFind procedure is quite slow and may take over an hour depending on your hardware.
 
 ## How to train the models?
 The StylEx framework consists of two parts, the "pretrained" classifier and the Encoder+GAN.
@@ -39,7 +41,7 @@ Two options, Mobilenet or ResNet, ResNet seemed to give better results on small 
 The files of the user study, which has been discussed in the paper, have been included in this repository in the `/all_user_studies` folder.
 
 ## License
-MIT.
+[MIT](/LICENSE)
 
 ## Acknowledgements
 Our repository is based on the StyleGAN2 training code in PyTorch of the amazing repository of Github user lucidrains, [stylegan2-pytorch](https://github.com/lucidrains/stylegan2-pytorch). To their training code we added the StylEx training code.
