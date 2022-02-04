@@ -25,7 +25,7 @@ stylex/tb_logs_stylex/*
 
 # Trained models
 
-stylex/models/*
+#stylex/models/*
 #stylex/trained_classifiers/*
 
 # Image results
