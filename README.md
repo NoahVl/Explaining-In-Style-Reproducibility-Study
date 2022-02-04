@@ -18,8 +18,10 @@ Running this notebook requires a CUDA-enabled graphics card. Installing the envi
 1. Create the conda environment from the .yml file.
 2. Activate the environment.
 3. Open jupyter notebook.
-4. Select `model_to_choose` to pick the dataset/model on which to show results. Default is 'plant'.
-5. Run the `all_results_notebook.ipynb` notebook! 
+4. Open the `stylex/all_results_notebook.ipynb` notebook.
+5. Download the model files as described in the notebook.
+6. Select `model_to_choose` to pick the dataset/model on which to show results. Default is 'plant'.
+
 
 ## Verifying results
 
