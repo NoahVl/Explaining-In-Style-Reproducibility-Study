@@ -7,7 +7,12 @@ This repository is a re-implementation of [Explaining in Style: Training a GAN t
 </h1>
 
 [![MIT License](https://img.shields.io/badge/License-MIT-green.svg)](/LICENSE)
-[![Documentation](https://img.shields.io/badge/docs-master-green.svg)](./docs)
+
+## Paper
+**[Re] Explaining in Style: Training a GAN to explain a classifier in StyleSpace**  
+Noah Van der Vleuten, Tadija Radusinović, Rick Akkerman, Meilina Reksoprodjo
+
+Paper: https://openreview.net/forum?id=SYUxyazQh0Y
 
 
 ## Requirements
