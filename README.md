@@ -53,7 +53,7 @@ If you want to train a StylEx model on a new dataset we suggest you first train 
 If you want to use a new classifier architecture you should add support for this in one of the `stylex_train` files.
 
 ### Training one of the supported classifiers
-Of the two options, Mobilenet or ResNet, ResNet seemed to give better results on small images upscaled to 224px than Mobilenet.
+Natively we support the MobileNet V2 and ResNet architecture. Of the two options, ResNet seemed to give much better results on small images upscaled to 224px than MobileNet. The MobileNet classifier training code has been included, however to reiterate, it is advised to train a ResNet classifier when using small images.
 
 ## User study
 The files of the user study, which has been discussed in the paper, have been included in this repository in the `/all_user_studies` folder.
