@@ -15,14 +15,13 @@ Noah Van der Vleuten, Tadija Radusinović, Rick Akkerman, Meilina Reksoprodjo
 Paper: https://openreview.net/forum?id=SYUxyazQh0Y
 
 **If you use this for research, please cite our paper:**
-```
-@inproceedings{
-vleuten2022re,
-title={[Re] Explaining in Style: Training a {GAN} to explain a classifier in StyleSpace},
-author={Noah Van der Vleuten and Tadija Radusinovi{\'c} and Rick Akkerman and Meilina Reksoprodjo},
-booktitle={ML Reproducibility Challenge 2021 (Fall Edition)},
-year={2022},
-url={https://openreview.net/forum?id=SYUxyazQh0Y}
+```bibtex
+@inproceedings{vleuten2022re,
+  title     = {[Re] Explaining in Style: Training a {GAN} to explain a classifier in StyleSpace},
+  author    = {Noah Van der Vleuten and Tadija Radusinovi{\'c} and Rick Akkerman and Meilina Reksoprodjo},
+  booktitle = {ML Reproducibility Challenge 2021 (Fall Edition)},
+  year      = {2022},
+  url       = {https://openreview.net/forum?id=SYUxyazQh0Y}
 }
 ```
 
