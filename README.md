@@ -49,10 +49,12 @@ The StylEx framework consists of two parts, the "pretrained" classifier and the 
 
 If you want to train a StylEx model on a new dataset we suggest you first train a new classifier and then provide it to the `cli.py` file to train the StylEx model on this dataset with the new classifier in evaluation mode. If you use a Resnet/Mobilenet model you should only have to change the classifier_name parameter in the `cli.py` file, or change it as a parameter using `--classifier_name <mobilenet/resnet>` when you call the `cli.py` file. 
 
-If you want to use a new classifier architecture you should add support for this in one of the `stylex_train` files.
+If you want to use a new classifier architecture you should add support for this in one of the `stylex_train.py` files.
 
 ### Training one of the supported classifiers
-Natively we support the MobileNet V2 and ResNet architecture. Of the two options, ResNet seemed to give much better results on small images upscaled to 224px than MobileNet. The MobileNet classifier training code has been included, however to reiterate, it is advised to train a ResNet classifier when using small images.
+Natively we support the MobileNet V2 and ResNet architecture. Of the two options, ResNet seemed to give much better results on small images upscaled to 224px than MobileNet. The MobileNet classifier [training code](./stylex/train_mobilenet_classifier.py) has been included, however to reiterate, it is advised to train a ResNet classifier when using small images. We have also observed that unfreezing the layers iteratively by editing a Python file is not that preferred.
+
+Therefore we have also created and included a [notebook](./stylex/classifier_training_celeba.ipynb) that was used to train the ResNet-18 CelebA gender classifier, this classifier was then used to be explained by the StyleGAN model trained on the FFHQ dataset as per directions of the original paper. In the notebook it is also possible to train a MobileNet classifier.
 
 ## User study
 The files of the user study, which has been discussed in the paper, have been included in this repository in the `/all_user_studies` folder.
