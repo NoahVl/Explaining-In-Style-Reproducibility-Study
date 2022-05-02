@@ -6,7 +6,7 @@ This repository is a re-implementation of [Explaining in Style: Training a GAN t
 <img src="all_user_studies\user_study_images_old_faces\study_1\class_study_0.gif" alt="GIF of user-study" align="right"  width="200" height="200"</img>
 </h1>
 
-[![MIT License](https://img.shields.io/badge/License-MIT-green.svg)](/LICENSE)
+[![DOI](https://zenodo.org/badge/442497190.svg)](https://zenodo.org/badge/latestdoi/442497190) [![MIT License](https://img.shields.io/badge/License-MIT-green.svg)](/LICENSE) 
 
 ## Paper
 **[Re] Explaining in Style: Training a GAN to explain a classifier in StyleSpace**  
