@@ -1523,12 +1523,10 @@ class Trainer():
 
         # regular
         from_encoder_string = ""
-        image_batch = None
+        image_batch = next(self.loader).cuda(self.rank)
 
         if encoder_input:
             from_encoder_string = "from_encoder"
-            image_batch = next(self.loader).cuda(self.rank)
-
             with torch.no_grad():
                 real_classified_logits = self.classifier.classify_images(image_batch)
                 w = [(torch.cat((self.StylEx.encoder(image_batch), real_classified_logits), dim=1), num_layers)]
