@@ -59,6 +59,11 @@ Therefore we have also created and included a [notebook](./stylex/classifier_tra
 ## User study
 The files of the user study, which has been discussed in the paper, have been included in this repository in the `/all_user_studies` folder.
 
+## Limitations
+1. We likely do not support multi-GPU training. This was present in the original [lucidrains](https://github.com/lucidrains/stylegan2-pytorch) repository, however we stripped out some parts for ease of programming. We would highly appreciate someone with a mutli-GPU setup adding the functionality back in!
+
+**For more information, please look at the Github issues page at both the [open](https://github.com/NoahVl/Explaining-In-Style-Reproducibility-Study/issues) and [closed](https://github.com/NoahVl/Explaining-In-Style-Reproducibility-Study/issues?q=is%3Aissue+is%3Aclosed) issues.**
+
 ## License
 [MIT](/LICENSE)
 
