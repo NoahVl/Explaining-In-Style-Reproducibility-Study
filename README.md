@@ -16,12 +16,27 @@ Paper: https://openreview.net/forum?id=SYUxyazQh0Y
 
 **If you use this for research, please cite our paper:**
 ```bibtex
-@inproceedings{vleuten2022re,
-  title     = {[Re] Explaining in Style: Training a {GAN} to explain a classifier in StyleSpace},
-  author    = {Noah Van der Vleuten and Tadija Radusinovi{\'c} and Rick Akkerman and Meilina Reksoprodjo},
-  booktitle = {ML Reproducibility Challenge 2021 (Fall Edition)},
-  year      = {2022},
-  url       = {https://openreview.net/forum?id=SYUxyazQh0Y}
+@article{Vleuten:2022,
+  author = {van der Vleuten, Noah and Radusinović, Tadija and Akkerman, Rick and Reksoprodjo, Meilina},
+  title = {{[Re] Explaining in Style: Training a GAN to explain a classifier in StyleSpace}},
+  journal = {ReScience C},
+  year = {2022},
+  month = may,
+  volume = {8},
+  number = {2},
+  pages = {{#42}},
+  doi = {10.5281/zenodo.6574709},
+  url = {https://zenodo.org/record/6574709/files/article.pdf},
+  code_url = {https://github.com/NoahVl/Explaining-In-Style-Reproducibility-Study},
+  code_doi = {10.5281/zenodo.6512392},
+  code_swh = {swh:1:dir:04e11a55f476b115b40fd6af9d06ed70eb248535},
+  data_url = {},
+  data_doi = {},
+  review_url = {https://openreview.net/forum?id=SYUxyazQh0Y},
+  type = {Replication},
+  language = {Python},
+  domain = {ML Reproducibility Challenge 2021},
+  keywords = {rescience c, machine learning, deep learning, python, pytorch, explainable ai, xai, gan, stylegan2, stylex}
 }
 ```
 
