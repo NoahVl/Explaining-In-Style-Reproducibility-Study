@@ -12,7 +12,7 @@ This repository is a re-implementation of [Explaining in Style: Training a GAN t
 **[Re] Explaining in Style: Training a GAN to explain a classifier in StyleSpace**  
 Noah Van der Vleuten, Tadija Radusinović, Rick Akkerman, Meilina Reksoprodjo
 
-Paper: https://openreview.net/forum?id=SYUxyazQh0Y
+Paper: https://rescience.github.io/bibliography/Vleuten_2022.html
 
 **If you use this for research, please cite our paper:**
 ```bibtex
