@@ -14,6 +14,9 @@ Noah Van der Vleuten, Tadija Radusinović, Rick Akkerman, Meilina Reksoprodjo
 
 Paper: https://rescience.github.io/bibliography/Vleuten_2022.html
 
+Presented at NeurIPS 2022: https://nips.cc/virtual/2022/poster/56097  
+Contains a poster and a presentation/slides about our reproducibility efforts.
+
 **If you use this for research, please cite our paper:**
 ```bibtex
 @article{Vleuten:2022,
